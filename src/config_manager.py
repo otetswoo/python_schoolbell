@@ -91,6 +91,27 @@ class ConfigManager:
         self.preferences["music"]["folder"] = folder
         self.preferences["music"]["enabled"] = bool(folder)
     
+    def get_anthem_settings(self):
+        anthem = self.preferences.get("anthem", {})
+        if not anthem:
+            anthem = {"enabled": False, "file": "", "day": "monday", "time": "08:30"}
+        return anthem
+    
+    def set_anthem_file(self, file_path):
+        if "anthem" not in self.preferences:
+            self.preferences["anthem"] = {}
+        self.preferences["anthem"]["file"] = file_path
+    
+    def set_anthem_day(self, day):
+        if "anthem" not in self.preferences:
+            self.preferences["anthem"] = {}
+        self.preferences["anthem"]["day"] = day
+    
+    def set_anthem_time(self, time_str):
+        if "anthem" not in self.preferences:
+            self.preferences["anthem"] = {}
+        self.preferences["anthem"]["time"] = time_str
+    
     def get_locale(self):
         return self.preferences.get("locale", "ru")
     

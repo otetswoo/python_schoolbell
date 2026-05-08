@@ -10,7 +10,7 @@ from pathlib import Path
 
 class SoundPlayer:
     def __init__(self):
-        self.last_played = {"start": 0.0, "end": 0.0}
+        self.last_played = {"start": 0.0, "end": 0.0, "anthem": 0.0}
         self.min_interval = 60
         self.current_process = None
     
@@ -21,7 +21,8 @@ class SoundPlayer:
         now = time.time()
         last = self.last_played.get(sound_type, 0.0)
         
-        if sound_type != "test" and (now - last) < self.min_interval:
+        # Убираем кулдаун для ручного воспроизведения (test и anthem)
+        if sound_type not in ("test", "anthem") and (now - last) < self.min_interval:
             return False
         
         try:

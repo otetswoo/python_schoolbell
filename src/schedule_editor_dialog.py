@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QListWidget, QListWidgetItem, QDialogButtonBox, QMessageBox
+    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget,
+    QListWidgetItem, QDialogButtonBox
 )
+
 from src.lesson_dialog import LessonDialog
+from src.config import WEEK_DAYS_RU
 
 
 class ScheduleEditorDialog(QDialog):

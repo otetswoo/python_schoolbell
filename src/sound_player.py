@@ -18,13 +18,8 @@ class SoundPlayer:
         if not sound_path or not Path(sound_path).exists():
             return False
         
-        now = time.time()
-        last = self.last_played.get(sound_type, 0.0)
-        
-        # Убираем кулдаун для ручного воспроизведения (test и anthem)
-        if sound_type not in ("test", "anthem") and (now - last) < self.min_interval:
-            return False
-        
+        # Для ручного воспроизведения (test) убираем кулдаун полностью
+        # Для остальных типов звонков тоже убираем кулдаун
         try:
             ext = Path(sound_path).suffix.lower()
             
@@ -48,7 +43,6 @@ class SoundPlayer:
                 else:
                     self.current_process = subprocess.Popen(["aplay", str(sound_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-            self.last_played[sound_type] = now
             return True
             
         except Exception as e:

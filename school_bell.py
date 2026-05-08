@@ -170,7 +170,7 @@ class SchoolBell(QMainWindow):
             for key, name in variant_names.items():
                 variant_combo.addItem(name, key)
             variant_combo.setCurrentText(variant_names.get(self.day_variants.get(full, "usual"), "Обычное"))
-            variant_combo.currentTextChanged.connect(lambda v, combo=variant_combo, d=full: self.on_variant_changed(d, combo))
+            variant_combo.currentIndexChanged.connect(lambda idx, combo=variant_combo, d=full: self.on_variant_changed(d, combo))
             variant_combo.setToolTip("Вариант расписания")
             self.days_layout.addWidget(variant_combo)
             self.variant_buttons[full] = variant_combo
@@ -641,7 +641,7 @@ class SchoolBell(QMainWindow):
                 QHeaderView::section { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; padding: 4px; }
                 QPushButton { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; padding: 6px; }
                 QPushButton:hover { background-color: #5a5a5a; }
-                QPushButton:checked { background-color: #2e7d32; color: #ffffff; }
+                QPushButton:checked { background-color: #2e7d32; color: #ffffff; font-weight: bold; }
                 QLabel { color: #ffffff; }
                 QMenuBar { background-color: #3c3c3c; color: #ffffff; }
                 QMenu { background-color: #3c3c3c; color: #ffffff; }
@@ -660,7 +660,38 @@ class SchoolBell(QMainWindow):
                 QFormLayout QLabel { color: #ffffff; }
             """)
         else:
-            self.setStyleSheet("")
+            # Светлая тема в стиле Adwaita Gnome
+            self.setStyleSheet("""
+                QMainWindow { background-color: #fafafa; color: #2e3436; }
+                QTableWidget { background-color: #ffffff; color: #2e3436; gridline-color: #cdc7c2; }
+                QHeaderView::section { background-color: #e8e8e7; color: #2e3436; border: 1px solid #cdc7c2; padding: 4px; font-weight: bold; }
+                QPushButton { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; padding: 6px; border-radius: 6px; }
+                QPushButton:hover { background-color: #ffffff; border-color: #9a9996; }
+                QPushButton:pressed { background-color: #d5d3cf; }
+                QPushButton:checked { background-color: #3584e4; color: #ffffff; font-weight: bold; border-color: #1c71d8; }
+                QPushButton:checked:hover { background-color: #62a0ea; }
+                QLabel { color: #2e3436; }
+                QMenuBar { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
+                QMenuBar::item:selected { background-color: #ffffff; }
+                QMenu { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
+                QMenu::item:selected { background-color: #ffffff; }
+                QCheckBox { color: #2e3436; }
+                QCheckBox::indicator { background-color: #ffffff; border: 1px solid #cdc7c2; border-radius: 4px; }
+                QCheckBox::indicator:checked { background-color: #3584e4; border-color: #1c71d8; }
+                QStatusBar, QLabel#status { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
+                QDialog { background-color: #fafafa; color: #2e3436; }
+                QDialog QLabel { color: #2e3436; }
+                QDialog QPushButton { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
+                QDialog QSpinBox, QDialog QLineEdit, QDialog QComboBox { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; }
+                QSpinBox { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; }
+                QLineEdit { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; padding: 4px; }
+                QComboBox { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; padding: 4px; }
+                QComboBox::drop-down { border: none; width: 20px; }
+                QComboBox::down-arrow { image: none; border-left: 1px solid #cdc7c2; }
+                QListWidget { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; }
+                QListWidget::item:selected { background-color: #3584e4; color: #ffffff; }
+                QFormLayout QLabel { color: #2e3436; }
+            """)
     
     def set_locale(self, locale):
         self.current_locale = locale

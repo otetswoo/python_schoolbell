@@ -23,8 +23,6 @@ from PySide6.QtCore import Qt, QTimer, Signal, QEvent
 ROOT = Path(__file__).resolve().parent
 SCHEDULE_PATH = ROOT / "schedule.yml"
 PREFERENCES_FILE = ROOT / "preferences.yml"
-LOG_DIR = ROOT / "logs"
-LOG_DIR.mkdir(exist_ok=True)
 
 # Minimal interval between same sound plays (seconds)
 MIN_SOUND_INTERVAL = 60
@@ -38,6 +36,175 @@ COLOR_NORMAL = QColor("#ffffff")   # white
 WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 WEEK_DAYS_RU = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
 WEEK_DAYS_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
+WEEK_DAYS_SHORT_EN = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+
+# Localization dictionaries
+LOCALIZATION = {
+    "ru": {
+        "app_title": "Школьные звонки",
+        "current_day_label": "📅 Текущий день: {day}",
+        "variant_label": "📋 Вариант: {variant}",
+        "no_day_selected": "Не выбран",
+        "no_variant_selected": "Не выбран",
+        "table_headers": ["Начало", "Конец", "Урок"],
+        "btn_edit_schedule": "✏️ Редактировать расписание",
+        "btn_edit_all": "✏️ Редактировать все дни",
+        "status_ready": "✅ Готов к работе",
+        "menu_file": "Файл",
+        "menu_settings": "⚙️ Настройки",
+        "menu_edit": "✏️ Редактировать",
+        "menu_tools": "🛠️ Инструменты",
+        "action_load": "📂 Загрузить расписание",
+        "action_save": "💾 Сохранить расписание",
+        "action_today": "📅 Сегодня",
+        "action_exit": "🚪 Выход",
+        "action_sounds": "🔊 Настроить звуки",
+        "action_edit_current": "Текущий день",
+        "action_edit_all": "Все дни недели",
+        "action_test_start": "▶️ Тест сигнала начала",
+        "action_test_end": "⏹️ Тест сигнала конца",
+        "action_restore": "🔄 Восстановить все",
+        "action_locale_ru": "🇷🇺 Русский",
+        "action_locale_en": "🇬🇧 English",
+        "variant_usual": "🏫 Обычное расписание",
+        "variant_short": "⏱️ Сокращенное расписание",
+        "variant_none": "❌ Нет расписания",
+        "day_monday": "Понедельник",
+        "day_tuesday": "Вторник",
+        "day_wednesday": "Среда",
+        "day_thursday": "Четверг",
+        "day_friday": "Пятница",
+        "day_saturday": "Суббота",
+        "day_sunday": "Воскресенье",
+        "dlg_lesson_title": "Урок",
+        "dlg_lesson_num": "Номер урока:",
+        "dlg_lesson_start": "Время начала (HH:MM):",
+        "dlg_lesson_end": "Время окончания (HH:MM):",
+        "dlg_btn_ok": "OK",
+        "dlg_btn_cancel": "Отмена",
+        "dlg_btn_save": "Сохранить",
+        "dlg_editor_title": "Редактор расписания — {day} ({variant})",
+        "dlg_btn_add": "Добавить",
+        "dlg_btn_edit": "Редактировать",
+        "dlg_btn_delete": "Удалить",
+        "dlg_btn_up": "Вверх",
+        "dlg_btn_down": "Вниз",
+        "dlg_template_load": "Загрузить шаблон",
+        "dlg_copy_from": "Копировать из дня",
+        "msg_select_day_first": "Сначала выберите день",
+        "msg_changes_applied": "Изменения применены (не забудьте сохранить файл)",
+        "msg_settings_saved": "Настройки сохранены",
+        "msg_error_saving": "Ошибка сохранения настроек: {error}",
+        "msg_confirm_delete": "Удалить выбранный урок?",
+        "msg_select_lesson_edit": "Выберите урок для редактирования",
+        "msg_select_lesson_delete": "Выберите урок для удаления",
+        "msg_error_time_format": "Время в формате HH:MM",
+        "msg_error_overlap": "Перекрытие уроков: {l1} и {l2}",
+        "msg_error_start_end": "Урок {num} начало >= конец",
+        "msg_template_loaded": "Шаблон '{name}' загружен",
+        "msg_template_missing": "Шаблон '{name}' отсутствует",
+        "msg_source_empty": "Источник не содержит расписания",
+        "msg_copied_from": "Скопировано из {day}",
+        "msg_day_variant_selected": "Для {day} выбран вариант: {variant}",
+        "msg_showing": "Показано: {day} — {variant}",
+        "msg_edit_all_info": "Откроется редактор для каждого дня по очереди.",
+        "msg_edit_all_title": "Редактирование всех дней",
+        "msg_sound_start": "Звук начала урока",
+        "msg_sound_end": "Звук конца урока",
+        "msg_select_sound_file": "Выберите звуковой файл",
+        "msg_schedule_loaded": "Расписание загружено",
+        "msg_schedule_saved": "Расписание сохранено",
+        "msg_schedule_load_error": "Ошибка загрузки расписания: {error}",
+        "msg_schedule_save_error": "Ошибка сохранения расписания: {error}",
+        "msg_today_set": "Показано расписание на сегодня",
+        "msg_all_reset": "Все настройки сброшены",
+        "msg_test_play": "Тестовое воспроизведение: {sound}",
+        "file_filter_yaml": "YAML файлы (*.yml *.yaml)",
+        "file_filter_audio": "Аудио файлы (*.wav *.mp3 *.ogg)",
+    },
+    "en": {
+        "app_title": "School Bell",
+        "current_day_label": "📅 Current day: {day}",
+        "variant_label": "📋 Variant: {variant}",
+        "no_day_selected": "Not selected",
+        "no_variant_selected": "Not selected",
+        "table_headers": ["Start", "End", "Lesson"],
+        "btn_edit_schedule": "✏️ Edit Schedule",
+        "btn_edit_all": "✏️ Edit All Days",
+        "status_ready": "✅ Ready",
+        "menu_file": "File",
+        "menu_settings": "⚙️ Settings",
+        "menu_edit": "✏️ Edit",
+        "menu_tools": "🛠️ Tools",
+        "action_load": "📂 Load Schedule",
+        "action_save": "💾 Save Schedule",
+        "action_today": "📅 Today",
+        "action_exit": "🚪 Exit",
+        "action_sounds": "🔊 Sound Settings",
+        "action_edit_current": "Current Day",
+        "action_edit_all": "All Week Days",
+        "action_test_start": "▶️ Test Start Bell",
+        "action_test_end": "⏹️ Test End Bell",
+        "action_restore": "🔄 Reset All",
+        "action_locale_ru": "🇷🇺 Русский",
+        "action_locale_en": "🇬🇧 English",
+        "variant_usual": "🏫 Regular Schedule",
+        "variant_short": "⏱️ Short Schedule",
+        "variant_none": "❌ No Schedule",
+        "day_monday": "Monday",
+        "day_tuesday": "Tuesday",
+        "day_wednesday": "Wednesday",
+        "day_thursday": "Thursday",
+        "day_friday": "Friday",
+        "day_saturday": "Saturday",
+        "day_sunday": "Sunday",
+        "dlg_lesson_title": "Lesson",
+        "dlg_lesson_num": "Lesson #:",
+        "dlg_lesson_start": "Start time (HH:MM):",
+        "dlg_lesson_end": "End time (HH:MM):",
+        "dlg_btn_ok": "OK",
+        "dlg_btn_cancel": "Cancel",
+        "dlg_btn_save": "Save",
+        "dlg_editor_title": "Schedule Editor — {day} ({variant})",
+        "dlg_btn_add": "Add",
+        "dlg_btn_edit": "Edit",
+        "dlg_btn_delete": "Delete",
+        "dlg_btn_up": "Up",
+        "dlg_btn_down": "Down",
+        "dlg_template_load": "Load Template",
+        "dlg_copy_from": "Copy from Day",
+        "msg_select_day_first": "Please select a day first",
+        "msg_changes_applied": "Changes applied (remember to save the file)",
+        "msg_settings_saved": "Settings saved",
+        "msg_error_saving": "Error saving settings: {error}",
+        "msg_confirm_delete": "Delete selected lesson?",
+        "msg_select_lesson_edit": "Select a lesson to edit",
+        "msg_select_lesson_delete": "Select a lesson to delete",
+        "msg_error_time_format": "Time must be in HH:MM format",
+        "msg_error_overlap": "Lessons overlap: {l1} and {l2}",
+        "msg_error_start_end": "Lesson {num} start >= end",
+        "msg_template_loaded": "Template '{name}' loaded",
+        "msg_template_missing": "Template '{name}' not found",
+        "msg_source_empty": "Source has no schedule",
+        "msg_copied_from": "Copied from {day}",
+        "msg_day_variant_selected": "Variant selected for {day}: {variant}",
+        "msg_showing": "Showing: {day} — {variant}",
+        "msg_edit_all_info": "Editor will open for each day sequentially.",
+        "msg_edit_all_title": "Edit All Days",
+        "msg_sound_start": "Start bell sound",
+        "msg_sound_end": "End bell sound",
+        "msg_select_sound_file": "Select sound file",
+        "msg_schedule_loaded": "Schedule loaded",
+        "msg_schedule_saved": "Schedule saved",
+        "msg_schedule_load_error": "Error loading schedule: {error}",
+        "msg_schedule_save_error": "Error saving schedule: {error}",
+        "msg_today_set": "Today's schedule is shown",
+        "msg_all_reset": "All settings reset",
+        "msg_test_play": "Test playing: {sound}",
+        "file_filter_yaml": "YAML files (*.yml *.yaml)",
+        "file_filter_audio": "Audio files (*.wav *.mp3 *.ogg)",
+    }
+}
 
 # Default YAML structure (variant A)
 DEFAULT_SCHEDULE = {
@@ -78,13 +245,6 @@ DEFAULT_SCHEDULE = {
 # ------------------ Утилиты ------------------
 def ensure_dir(path: Path):
     path.mkdir(parents=True, exist_ok=True)
-
-def write_log(msg: str):
-    ensure_dir(LOG_DIR)
-    fn = LOG_DIR / f"bell_{datetime.date.today().isoformat()}.log"
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(fn, "a", encoding="utf-8") as f:
-        f.write(f"[{ts}] {msg}\n")
 
 def human_date(now: datetime.datetime) -> str:
     months = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"]
@@ -380,7 +540,11 @@ class ScheduleEditorDialog(QDialog):
 class SchoolBell(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Школьные звонки")
+        
+        # Load locale from preferences or default to Russian
+        self.current_locale = self.load_locale_preference()
+        
+        self.update_locale(self.current_locale)
         self.resize(800, 600)
 
         # state
@@ -404,9 +568,9 @@ class SchoolBell(QMainWindow):
 
         # Info layout (as in your file)
         info_layout = QHBoxLayout()
-        self.current_day_label = QLabel("Текущий день: Не выбран")
+        self.current_day_label = QLabel(self.tr("current_day_label").format(day=self.t("no_day_selected")))
         self.current_day_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
-        self.variant_label = QLabel("Вариант: Не выбран")
+        self.variant_label = QLabel(self.tr("variant_label").format(variant=self.t("no_variant_selected")))
         self.variant_label.setStyleSheet("font-size: 11pt; color: #666;")
         info_layout.addWidget(self.current_day_label)
         info_layout.addStretch()
@@ -422,7 +586,8 @@ class SchoolBell(QMainWindow):
 
         # Table
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Начало", "Конец", "Урок"])
+        headers = self.t("table_headers")
+        self.table.setHorizontalHeaderLabels(headers)
         # initial column widths similar to your file, but will be stretchable
         self.table.setColumnWidth(0, 120)
         self.table.setColumnWidth(1, 120)
@@ -443,7 +608,7 @@ class SchoolBell(QMainWindow):
 
         # Edit buttons area (kept visually as in your original)
         edit_layout = QHBoxLayout()
-        self.edit_btn = QPushButton("✏️ Редактировать расписание")
+        self.edit_btn = QPushButton(self.t("btn_edit_schedule"))
         self.edit_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e3f2fd;
@@ -548,69 +713,81 @@ class SchoolBell(QMainWindow):
         self.menu_bar = QMenuBar(self)
         self.setMenuBar(self.menu_bar)
 
-        file_menu = self.menu_bar.addMenu("Файл")
-        load_action = QAction("📂 Загрузить расписание", self)
+        file_menu = self.menu_bar.addMenu(self.t("menu_file"))
+        load_action = QAction(self.t("action_load"), self)
         load_action.triggered.connect(self.load_schedule_dialog)
         load_action.setShortcut("Ctrl+O")
         file_menu.addAction(load_action)
 
-        save_action = QAction("💾 Сохранить расписание", self)
+        save_action = QAction(self.t("action_save"), self)
         save_action.triggered.connect(self.save_schedule_dialog)
         save_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_action)
 
         file_menu.addSeparator()
-        today_action = QAction("📅 Сегодня", self)
+        today_action = QAction(self.t("action_today"), self)
         today_action.triggered.connect(self.set_today_schedule)
         today_action.setShortcut("Ctrl+T")
         file_menu.addAction(today_action)
         file_menu.addSeparator()
-        exit_action = QAction("🚪 Выход", self)
+        exit_action = QAction(self.t("action_exit"), self)
         exit_action.triggered.connect(self.close)
         exit_action.setShortcut("Ctrl+Q")
         file_menu.addAction(exit_action)
 
-        settings_menu = self.menu_bar.addMenu("⚙️ Настройки")
-        sound_action = QAction("🔊 Настроить звуки", self)
+        settings_menu = self.menu_bar.addMenu(self.t("menu_settings"))
+        sound_action = QAction(self.t("action_sounds"), self)
         sound_action.triggered.connect(self.select_sounds)
         settings_menu.addAction(sound_action)
+        
+        # Locale submenu
+        locale_menu = settings_menu.addMenu("🌐 Language / Язык")
+        locale_ru_action = QAction(self.t("action_locale_ru"), self)
+        locale_ru_action.triggered.connect(lambda: self.set_locale("ru"))
+        locale_menu.addAction(locale_ru_action)
+        locale_en_action = QAction(self.t("action_locale_en"), self)
+        locale_en_action.triggered.connect(lambda: self.set_locale("en"))
+        locale_menu.addAction(locale_en_action)
 
-        edit_menu = self.menu_bar.addMenu("✏️ Редактировать")
-        edit_current_action = QAction("Текущий день", self)
+        edit_menu = self.menu_bar.addMenu(self.t("menu_edit"))
+        edit_current_action = QAction(self.t("action_edit_current"), self)
         edit_current_action.triggered.connect(self.edit_current_schedule)
         edit_current_action.setShortcut("Ctrl+E")
         edit_menu.addAction(edit_current_action)
-        edit_all_action = QAction("Все дни недели", self)
+        edit_all_action = QAction(self.t("action_edit_all"), self)
         edit_all_action.triggered.connect(self.edit_all_schedules)
         edit_menu.addAction(edit_all_action)
 
-        tools_menu = self.menu_bar.addMenu("🛠️ Инструменты")
-        test_start = QAction("▶️ Тест сигнала начала", self)
+        tools_menu = self.menu_bar.addMenu(self.t("menu_tools"))
+        test_start = QAction(self.t("action_test_start"), self)
         test_start.triggered.connect(lambda: self.play_sound("start", reason="test"))
         test_start.setShortcut("F1")
         tools_menu.addAction(test_start)
-        test_end = QAction("⏹️ Тест сигнала конца", self)
+        test_end = QAction(self.t("action_test_end"), self)
         test_end.triggered.connect(lambda: self.play_sound("end", reason="test"))
         test_end.setShortcut("F2")
         tools_menu.addAction(test_end)
         tools_menu.addSeparator()
-        restore_all_action = QAction("🔄 Восстановить все", self)
+        restore_all_action = QAction(self.t("action_restore"), self)
         restore_all_action.triggered.connect(self.reset_all_to_default)
         tools_menu.addAction(restore_all_action)
 
     # ---------- Day buttons ----------
     def setup_day_buttons(self):
         # create compact day buttons with CheckableMenu
-        for short_name, full_name in zip(WEEK_DAYS_SHORT, WEEK_DAYS_RU):
+        short_names = WEEK_DAYS_SHORT if self.current_locale == "ru" else WEEK_DAYS_SHORT_EN
+        full_names = WEEK_DAYS_RU if self.current_locale == "ru" else [LOCALIZATION["en"][f"day_{d}"] for d in WEEK_DAYS]
+        
+        for i, (short_name, full_name) in enumerate(zip(short_names, full_names)):
             btn = QPushButton(short_name)
             btn.setMinimumHeight(36)
             btn.setMinimumWidth(48)
             btn.setToolTip(full_name)
 
             menu = CheckableMenu(self)
-            normal_action = menu.add_checkable_action("🏫 Обычное расписание")
-            short_action = menu.add_checkable_action("⏱️ Сокращенное расписание")
-            none_action = menu.add_checkable_action("❌ Нет расписания")
+            normal_action = menu.add_checkable_action(self.t("variant_usual"))
+            short_action = menu.add_checkable_action(self.t("variant_short"))
+            none_action = menu.add_checkable_action(self.t("variant_none"))
             menu.optionSelected.connect(lambda variant, d=full_name: self.on_day_variant_selected(d, variant))
             btn.setMenu(menu)
             btn.clicked.connect(lambda checked=False, d=full_name: self.on_day_button_clicked(d))
@@ -647,20 +824,25 @@ class SchoolBell(QMainWindow):
             if self.current_day and self.current_day == day_full_name:
                 self.select_schedule(day_full_name, variant)
             self.show_notification(f"Для {day_full_name} выбран вариант: {variant}")
-            write_log(f"Variant for {day_full_name} set to {variant}")
+            
 
     def select_schedule(self, day_full_name: str, variant: str):
-        # day_full_name is Russian full name
-        if day_full_name not in WEEK_DAYS_RU:
+        # day_full_name is Russian full name (or English if locale is en)
+        day_names_ru = WEEK_DAYS_RU if self.current_locale == "ru" else [LOCALIZATION["en"][f"day_{d}"] for d in WEEK_DAYS]
+        if day_full_name not in day_names_ru:
             return
-        idx = WEEK_DAYS_RU.index(day_full_name)
+        idx = day_names_ru.index(day_full_name)
         key = WEEK_DAYS[idx]  # english key for internal schedules
         self.current_day = day_full_name
         self.current_variant = variant
         # update labels (we keep these as in your UI)
-        self.current_day_label.setText(f"📅 Текущий день: {day_full_name}")
-        variant_names = {"usual": "🏫 Обычное расписание", "short": "⏱️ Сокращенное расписание", "none": "❌ Нет расписания"}
-        self.variant_label.setText(f"📋 Вариант: {variant_names.get(variant, variant)}")
+        self.current_day_label.setText(self.tr("current_day_label").format(day=day_full_name))
+        variant_names = {
+            "usual": self.t("variant_usual"), 
+            "short": self.t("variant_short"), 
+            "none": self.t("variant_none")
+        }
+        self.variant_label.setText(self.tr("variant_label").format(variant=variant_names.get(variant, variant)))
         # ensure schedule_variants has data
         if key not in self.schedule_variants:
             # fill from templates
@@ -686,8 +868,8 @@ class SchoolBell(QMainWindow):
             self.table.setItem(r,2,item_num)
         self.update_button_text(day_full_name, variant)
         self.update_button_colors()
-        self.show_notification(f"Показано: {day_full_name} — {variant}")
-        write_log(f"Displayed schedule for {key} variant {variant}")
+        self.show_notification(self.t("msg_showing").format(day=day_full_name, variant=variant))
+        
 
     def update_button_text(self, day_full_name, variant):
         # set small indicator on button text, keep short name but add dot or small mark
@@ -695,8 +877,10 @@ class SchoolBell(QMainWindow):
         if not btn:
             return
         marks = {"usual": "●", "short": "○", "none": "✖"}
-        idx = WEEK_DAYS_RU.index(day_full_name)
-        short = WEEK_DAYS_SHORT[idx]
+        day_names_ru = WEEK_DAYS_RU if self.current_locale == "ru" else [LOCALIZATION["en"][f"day_{d}"] for d in WEEK_DAYS]
+        idx = day_names_ru.index(day_full_name)
+        short_names = WEEK_DAYS_SHORT if self.current_locale == "ru" else WEEK_DAYS_SHORT_EN
+        short = short_names[idx]
         btn.setText(f"{short} {marks.get(variant,'')}")
         # set menu checked appropriately
         menu = self.day_menus.get(day_full_name)
@@ -744,10 +928,10 @@ class SchoolBell(QMainWindow):
                     self.sounds["end"] = sounds_section["end"]
 
                 self.show_notification("Конфигурация загружена")
-                write_log("Loaded schedule.yml")
+                
             except Exception as e:
                 self.show_notification(f"Ошибка загрузки schedule.yml: {e}")
-                write_log(f"Error loading schedule.yml: {e}")
+                
                 # fallback to defaults
                 self.templates = DEFAULT_SCHEDULE["schedules"].copy()
                 for k in WEEK_DAYS:
@@ -759,7 +943,7 @@ class SchoolBell(QMainWindow):
                 self.schedule_variants[k] = {"usual": [dict(l) for l in self.templates["usual"]], "short": [dict(l) for l in self.templates["short"]], "none": []}
             self.sounds = DEFAULT_SCHEDULE["sounds"].copy()
             self.show_notification("Созданы настройки по умолчанию")
-            write_log("Created default schedule")
+            
 
     def save_schedule_dialog(self):
         fname, _ = QFileDialog.getSaveFileName(self, "Сохранить расписание как YAML", str(SCHEDULE_PATH), "YAML Files (*.yml *.yaml)")
@@ -776,10 +960,10 @@ class SchoolBell(QMainWindow):
             with open(fname, "w", encoding="utf-8") as f:
                 yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
             self.show_notification(f"Расписание сохранено в {os.path.basename(fname)}")
-            write_log(f"Schedule saved to {fname}")
+            
         except Exception as e:
             self.show_notification(f"Ошибка сохранения: {e}")
-            write_log(f"Error saving schedule: {e}")
+            
 
     def load_schedule_dialog(self):
         fname, _ = QFileDialog.getOpenFileName(self, "Выбрать YAML файл расписания", "", "YAML Files (*.yml *.yaml);;All Files (*.*)")
@@ -806,15 +990,26 @@ class SchoolBell(QMainWindow):
             if sounds_section.get("end"):
                 self.sounds["end"] = sounds_section["end"]
             self.show_notification(f"Расписание загружено из {os.path.basename(fname)}")
-            write_log(f"Loaded schedule from {fname}")
+            
             # refresh display
             if self.current_day:
                 self.select_schedule(self.current_day, self.day_variants.get(self.current_day, "usual"))
         except Exception as e:
             self.show_notification(f"Ошибка загрузки: {e}")
-            write_log(f"Error loading schedule: {e}")
+            
 
     # ---------- Preferences ----------
+    def load_locale_preference(self):
+        """Load locale from preferences file, default to 'ru'"""
+        if Path(PREFERENCES_FILE).exists():
+            try:
+                with open(PREFERENCES_FILE, "r", encoding="utf-8") as f:
+                    prefs = yaml.safe_load(f) or {}
+                return prefs.get("locale", "ru")
+            except Exception:
+                pass
+        return "ru"
+
     def load_preferences(self):
         if Path(PREFERENCES_FILE).exists():
             try:
@@ -829,21 +1024,23 @@ class SchoolBell(QMainWindow):
                     self.sounds["start"] = sounds["start"]
                 if sounds.get("end"):
                     self.sounds["end"] = sounds["end"]
-                write_log("Loaded preferences")
             except Exception as e:
-                write_log(f"Error loading preferences: {e}")
+                pass
 
     def save_preferences(self, silent=True):
         try:
-            prefs = {"variants": self.day_variants, "sounds": self.sounds, "last_saved": datetime.datetime.now().isoformat()}
+            prefs = {
+                "locale": self.current_locale,
+                "variants": self.day_variants, 
+                "sounds": self.sounds, 
+                "last_saved": datetime.datetime.now().isoformat()
+            }
             with open(PREFERENCES_FILE, "w", encoding="utf-8") as f:
                 yaml.dump(prefs, f, allow_unicode=True, default_flow_style=False)
             if not silent:
-                self.show_notification("Настройки сохранены")
-            write_log("Preferences saved")
+                self.show_notification(self.t("msg_settings_saved"))
         except Exception as e:
-            self.show_notification(f"Ошибка сохранения настроек: {e}")
-            write_log(f"Error saving prefs: {e}")
+            self.show_notification(self.t("msg_error_saving").format(error=e))
 
     # ---------- Edit actions ----------
     def edit_current_schedule(self):
@@ -853,7 +1050,7 @@ class SchoolBell(QMainWindow):
         dlg = ScheduleEditorDialog(self, self.current_day, self.current_variant, self)
         if dlg.exec() == QDialog.Accepted:
             self.show_notification("Изменения применены (не забудьте сохранить файл)")
-            write_log(f"Edited schedule for {self.current_day}:{self.current_variant}")
+            
             # refresh display
             self.select_schedule(self.current_day, self.current_variant)
 
@@ -865,13 +1062,13 @@ class SchoolBell(QMainWindow):
             # open dialog for each day
             dlg = ScheduleEditorDialog(self, ru, "usual", self)
             if dlg.exec() == QDialog.Accepted:
-                write_log(f"Edited day {ru}")
+                pass
         self.show_notification("Редактирование всех дней завершено")
 
     def reset_to_default(self):
         # restore default template for current day/variant
         if not self.current_day:
-            self.show_notification("Сначала выберите день")
+            self.show_notification(self.t("msg_select_day_first"))
             return
         i = WEEK_DAYS_RU.index(self.current_day)
         eng = WEEK_DAYS[i]
@@ -880,29 +1077,28 @@ class SchoolBell(QMainWindow):
         self.schedule_variants[eng][variant] = [dict(l) for l in tpl]
         self.select_schedule(self.current_day, variant)
         self.show_notification("Восстановлено по шаблону для текущего дня")
-        write_log(f"Reset current {eng}:{variant}")
 
     def reset_all_to_default(self):
         for k in WEEK_DAYS:
             self.schedule_variants[k]["usual"] = [dict(l) for l in self.templates.get("usual",[])]
             self.schedule_variants[k]["short"] = [dict(l) for l in self.templates.get("short",[])]
             self.schedule_variants[k]["none"] = []
-        self.show_notification("Восстановлены все расписания по шаблонам")
-        write_log("Reset all schedules to templates")
+        self.show_notification(self.t("msg_all_reset"))
+        
         if self.current_day:
             self.select_schedule(self.current_day, self.day_variants.get(self.current_day, "usual"))
 
     # ---------- Sounds ----------
     def select_sounds(self):
-        start, _ = QFileDialog.getOpenFileName(self, "Выбрать звук начала", "", "Audio Files (*.wav *.mp3 *.ogg);;All Files (*.*)")
-        end, _ = QFileDialog.getOpenFileName(self, "Выбрать звук конца", "", "Audio Files (*.wav *.mp3 *.ogg);;All Files (*.*)")
+        start, _ = QFileDialog.getOpenFileName(self, self.t("msg_sound_start"), "", self.t("file_filter_audio"))
+        end, _ = QFileDialog.getOpenFileName(self, self.t("msg_sound_end"), "", self.t("file_filter_audio"))
         if start:
             self.sounds["start"] = start
         if end:
             self.sounds["end"] = end
         self.save_preferences(silent=True)
         self.show_notification("Звуки обновлены")
-        write_log("Sounds updated")
+        
 
     def play_sound(self, typ: str, reason: str="auto"):
         path = self.sounds.get(typ)
@@ -915,7 +1111,6 @@ class SchoolBell(QMainWindow):
         now_ts = time.time()
         last_ts = self.last_played.get(typ, 0.0)
         if now_ts - last_ts < MIN_SOUND_INTERVAL and reason != "test":
-            write_log(f"Skipping sound {typ} (recently played {now_ts-last_ts:.1f}s ago)")
             return False
         try:
             if platform.system() == "Windows":
@@ -934,11 +1129,9 @@ class SchoolBell(QMainWindow):
                 else:
                     subprocess.Popen(["aplay", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.last_played[typ] = now_ts
-            write_log(f"Played sound {typ} ({reason}) -> {path}")
             return True
         except Exception as e:
             self.show_notification(f"Ошибка воспроизведения: {e}")
-            write_log(f"Error playing sound {typ}: {e}")
             return False
 
     # ---------- Timers and bell checks ----------
@@ -970,7 +1163,7 @@ class SchoolBell(QMainWindow):
             self.set_today_schedule()
             self.last_checked_day = today_key
             self.show_notification(f"День сменился: {WEEK_DAYS_RU[WEEK_DAYS.index(today_key)]}")
-            write_log(f"Day changed to {today_key}")
+            
 
     def get_current_and_next(self, now_dt: datetime.datetime):
         if not self.current_day:
@@ -1035,7 +1228,6 @@ class SchoolBell(QMainWindow):
         ok = self.play_sound(typ, reason="auto")
         if ok:
             self.show_notification(f"Сигнал {'начало' if typ=='start' else 'конец'}")
-            write_log(f"Auto bell {typ} at {datetime.datetime.now().isoformat()}")
 
     # ---------- Notifications ----------
     def show_notification(self, text: str, timeout_ms: int = 4000):
@@ -1054,9 +1246,8 @@ class SchoolBell(QMainWindow):
     def closeEvent(self, event):
         try:
             self.save_preferences(silent=True)
-            write_log("Application closed (preferences saved)")
         except Exception as e:
-            write_log(f"Error saving prefs on exit: {e}")
+            pass
         super().closeEvent(event)
 
 # ------------------ main ------------------

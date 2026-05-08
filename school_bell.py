@@ -48,6 +48,7 @@ LOCALIZATION = {
         "action_sounds_end": "С урока",
         "menu_sounds": "Мелодии звонков",
         "action_music": "Музыка на переменах",
+        "action_anthem": "Гимн",
         "action_theme": "Тема",
         "action_locale_ru": "Русский",
         "action_locale_en": "English",
@@ -55,9 +56,11 @@ LOCALIZATION = {
         "status_ready": "Готов к работе",
         "chk_bells": "Звонки",
         "chk_music": "Музыка на переменах",
+        "chk_anthem": "Гимн",
         "btn_today": "📅 Сегодня",
         "btn_bell": "🔔 Звонок",
         "btn_music": "🎵 Музыка",
+        "btn_anthem": "🎼 Гимн",
         "btn_stop": "🛑 Стоп",
         "confirm_exit_title": "Подтверждение выхода",
         "confirm_exit_text": "Вы уверены, что хотите выйти из программы?",
@@ -74,6 +77,7 @@ LOCALIZATION = {
         "action_sounds_end": "End Lesson",
         "menu_sounds": "Bell Melodies",
         "action_music": "Break Music",
+        "action_anthem": "Anthem",
         "action_theme": "Theme",
         "action_locale_ru": "Русский",
         "action_locale_en": "English",
@@ -81,9 +85,11 @@ LOCALIZATION = {
         "status_ready": "Ready",
         "chk_bells": "Bells",
         "chk_music": "Break Music",
+        "chk_anthem": "Anthem",
         "btn_today": "📅 Today",
         "btn_bell": "🔔 Bell",
         "btn_music": "🎵 Music",
+        "btn_anthem": "🎼 Anthem",
         "btn_stop": "🛑 Stop",
         "confirm_exit_title": "Confirm Exit",
         "confirm_exit_text": "Are you sure you want to exit the program?",
@@ -115,6 +121,7 @@ class SchoolBell(QMainWindow):
         self.scheduled_music = {}
         self.bells_enabled = True
         self.music_enabled = False
+        self.anthem_enabled = False
         
         self.init_ui()
         self.load_data()
@@ -138,14 +145,7 @@ class SchoolBell(QMainWindow):
         layout = QVBoxLayout()
         central.setLayout(layout)
         
-        info = QHBoxLayout()
-        self.day_label = QLabel("День не выбран")
-        self.day_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
-        self.variant_label = QLabel("Вариант не выбран")
-        info.addWidget(self.day_label)
-        info.addStretch()
-        info.addWidget(self.variant_label)
-        layout.addLayout(info)
+        # Убраны day_label и variant_label - информация дублируется в других элементах
         
         self.days_layout = QHBoxLayout()
         self.day_buttons = {}
@@ -153,9 +153,6 @@ class SchoolBell(QMainWindow):
         for i, (short_ru, short_en) in enumerate(zip(WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN)):
             short = short_ru if self.current_locale == "ru" else short_en
             full = WEEK_DAYS_RU[i]
-            
-            # Контейнер для дня недели с кнопкой и переключателем варианта
-            day_container = QVBoxLayout()
             
             btn = QPushButton(short)
             btn.setMinimumHeight(36)
@@ -165,7 +162,7 @@ class SchoolBell(QMainWindow):
             self.days_layout.addWidget(btn)
             self.day_buttons[full] = btn
             
-            # Переключатель варианта расписания
+            # Переключатель варианта расписания под кнопкой дня
             variant_combo = QComboBox()
             variant_names = {"usual": "Обычное", "short": "Сокращ.", "none": "Нет"}
             if self.current_locale == "en":
@@ -193,6 +190,12 @@ class SchoolBell(QMainWindow):
         self.music_checkbox.stateChanged.connect(self.on_music_toggled)
         controls_layout.addWidget(self.music_checkbox)
         
+        self.anthem_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_anthem"])
+        anthem_settings = self.config.get_anthem_settings()
+        self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
+        self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
+        controls_layout.addWidget(self.anthem_checkbox)
+        
         controls_layout.addStretch()
         
         self.today_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_today"])
@@ -207,6 +210,10 @@ class SchoolBell(QMainWindow):
         self.music_btn.clicked.connect(self.manual_music)
         controls_layout.addWidget(self.music_btn)
         
+        self.anthem_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_anthem"].replace("🎼", "").strip())
+        self.anthem_btn.clicked.connect(self.manual_anthem)
+        controls_layout.addWidget(self.anthem_btn)
+        
         self.stop_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_stop"])
         self.stop_btn.clicked.connect(self.manual_stop)
         controls_layout.addWidget(self.stop_btn)
@@ -218,6 +225,8 @@ class SchoolBell(QMainWindow):
         self.table.setHorizontalHeaderLabels(headers)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        # Отключаем выделение элементов таблицы
+        self.table.setSelectionMode(QTableWidget.NoSelection)
         layout.addWidget(self.table)
         
         edit_layout = QHBoxLayout()
@@ -267,6 +276,10 @@ class SchoolBell(QMainWindow):
         music_act = QAction(LOCALIZATION[self.current_locale]["action_music"], self)
         music_act.triggered.connect(self.show_music_settings)
         settings_menu.addAction(music_act)
+        
+        anthem_act = QAction(LOCALIZATION[self.current_locale]["action_anthem"], self)
+        anthem_act.triggered.connect(self.show_anthem_settings)
+        settings_menu.addAction(anthem_act)
         
         theme_act = QAction(LOCALIZATION[self.current_locale]["action_theme"], self)
         theme_act.triggered.connect(self.show_theme_dialog)
@@ -357,9 +370,7 @@ class SchoolBell(QMainWindow):
             self.table.setItem(row, 1, QTableWidgetItem(l.get("end", "")))
             self.table.setItem(row, 2, QTableWidgetItem(str(l.get("num", ""))))
         
-        self.day_label.setText(f"📅 {day_ru}")
-        variant_names = {"usual": "Обычное", "short": "Сокращённое", "none": "Нет"}
-        self.variant_label.setText(f"📋 {variant_names.get(variant, variant)}")
+        # Убраны day_label и variant_label - информация дублируется в кнопках дней и переключателях вариантов
         
         # Обновляем стили кнопок дней и переключателей вариантов
         for d, btn in self.day_buttons.items():
@@ -605,6 +616,14 @@ class SchoolBell(QMainWindow):
                 self.music_player.set_music_folder(music["folder"])
             self.config.save_preferences(self.config.preferences)
     
+    def show_anthem_settings(self):
+        """Открыть диалог настройки гимна"""
+        from src.anthem_settings_dialog import AnthemSettingsDialog
+        dlg = AnthemSettingsDialog(self, self.config)
+        if dlg.exec() == QDialog.Accepted:
+            anthem = self.config.get_anthem_settings()
+            self.config.save_preferences(self.config.preferences)
+    
     def show_theme_dialog(self):
         dlg = ThemeDialog(self, self.config)
         if dlg.exec() == QDialog.Accepted:
@@ -659,7 +678,12 @@ class SchoolBell(QMainWindow):
         self.status_label.setText(texts["status_ready"])
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
+        self.anthem_checkbox.setText(texts["chk_anthem"])
         self.today_btn.setText(texts["btn_today"])
+        self.bell_btn.setText("▶️ " + texts["btn_bell"].replace("🔔", "").strip())
+        self.music_btn.setText("▶️ " + texts["btn_music"].replace("🎵", "").strip())
+        self.anthem_btn.setText("▶️ " + texts["btn_anthem"].replace("🎼", "").strip())
+        self.stop_btn.setText(texts["btn_stop"])
         
         headers = ["Начало", "Конец", "Урок"] if locale == "ru" else ["Start", "End", "Lesson"]
         self.table.setHorizontalHeaderLabels(headers)
@@ -674,13 +698,22 @@ class SchoolBell(QMainWindow):
         self.config.preferences["music"] = music_settings
         self.config.save_preferences(self.config.preferences)
     
+    def on_anthem_toggled(self, state):
+        self.anthem_enabled = (state == Qt.Checked)
+        anthem_settings = self.config.get_anthem_settings()
+        anthem_settings["enabled"] = self.anthem_enabled
+        self.config.preferences["anthem"] = anthem_settings
+        self.config.save_preferences(self.config.preferences)
+    
     def manual_bell(self):
         path = self.sounds.get("start", "")
         if path:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.sound_player.play(path, "start"):
+            if self.bells_enabled and self.sound_player.play(path, "start"):
                 self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
+            elif not self.bells_enabled:
+                self.status_label.setText(f"⚠️ Звонки отключены")
             else:
                 self.status_label.setText(f"⚠️ Звонок уже воспроизводится")
         else:
@@ -692,15 +725,32 @@ class SchoolBell(QMainWindow):
         if folder:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.music_player.play_random(folder):
+            if self.music_enabled and self.music_player.play_random(folder):
                 self.status_label.setText(f"🎵 {LOCALIZATION[self.current_locale]['btn_music'].replace('🎵', '').strip()}!")
+            elif not self.music_enabled:
+                self.status_label.setText(f"⚠️ Музыка отключена")
             else:
                 self.status_label.setText(f"⚠️ Музыка уже воспроизводится")
         else:
             QMessageBox.warning(self, "Ошибка", "Папка с музыкой не выбрана. Выберите в Настройки → Музыка на переменах")
+    
+    def manual_anthem(self):
+        anthem_settings = self.config.get_anthem_settings()
+        path = anthem_settings.get("file", "")
+        if path:
+            # Останавливаем предыдущее воспроизведение перед запуском нового
+            self.sound_player.stop_all()
+            if self.anthem_enabled and self.sound_player.play(path, "anthem"):
+                self.status_label.setText(f"🎼 {LOCALIZATION[self.current_locale]['btn_anthem'].replace('🎼', '').strip()}!")
+            elif not self.anthem_enabled:
+                self.status_label.setText(f"⚠️ Гимн отключен")
+            else:
+                self.status_label.setText(f"⚠️ Гимн уже воспроизводится")
+        else:
+            QMessageBox.warning(self, "Ошибка", "Файл гимна не выбран. Выберите в Настройки → Гимн")
 
     def manual_stop(self):
-        """Остановка воспроизведения звонка и музыки"""
+        """Остановка воспроизведения звонка, музыки и гимна"""
         self.sound_player.stop_all()
         self.status_label.setText(f"🛑 {LOCALIZATION[self.current_locale]['btn_stop'].replace('🛑', '').strip()}!")
     

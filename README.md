@@ -19,10 +19,7 @@
 pip install PySide6 pyyaml && git clone https://github.com/YOUR_USERNAME/school_bell.git && cd school_bell && python school_bell.py
 ```
 
-### Требования
-
-- Python 3.8+
-- PySide6, PyYAML
+Если уже скачали:
 
 ```bash
 pip install PySide6 pyyaml && python school_bell.py
@@ -32,20 +29,21 @@ pip install PySide6 pyyaml && python school_bell.py
 
 ```
 school_bell/
-├── school_bell.py       # Приложение
+├── school_bell.py       # Главное приложение
 ├── src/                 # Модули
-│   ├── config.py        # Константы
-│   ├── config_manager.py # Управление настройками
-│   ├── sound_player.py  # Воспроизведение звуков
-│   ├── music_player.py  # Музыка на переменах
-│   ├── lesson_dialog.py # Диалог урока
-│   ├── music_settings_dialog.py
-│   └── theme_dialog.py  # Выбор темы
-├── schedule.yml         # Расписание
-├── preferences.yml      # Настройки
-├── sounds/              # Звуки звонков
+│   ├── config.py        # Константы и настройки по умолчанию
+│   ├── config_manager.py # Управление настройками (YAML)
+│   ├── sound_player.py  # Воспроизведение звуков звонков
+│   ├── music_player.py  # Музыка на переменах (без повторов)
+│   ├── lesson_dialog.py # Диалог добавления/редактирования урока
+│   ├── schedule_editor_dialog.py # Редактор расписания
+│   ├── music_settings_dialog.py # Выбор папки с музыкой
+│   └── theme_dialog.py  # Выбор темы оформления
+├── schedule.yml         # Расписание звонков
+├── preferences.yml      # Пользовательские настройки
+├── sounds/              # Звуки звонков (начало/конец урока)
 ├── music/               # Музыка для перемен
-└── logs/                # Логи
+└── logs/                # Логи работы
 ```
 
 ## ⚙️ Настройка
@@ -74,13 +72,18 @@ sounds:
 
 ### Музыка на переменах
 
-1. Создайте папку `music/`
+1. Создайте папку `music/` (или любую другую с музыкой)
 2. Положите аудиофайлы (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`)
-3. **Настройки → Музыка на переменах** → выберите папку
+3. **Настройки → Музыка на переменах** → выберите папку через проводник
 
 Музыка играет через 2 минуты после звонка на перемену. Треки не повторяются в течение дня.
 
-> 💡 **Совет:** Создавайте тематические плейлисты в разных папках (например, `music/patriotic/`, `music/space/`) и меняйте папку в настройках каждую неделю.
+> 💡 **Совет:** Создавайте тематические плейлисты в разных папках:
+> - `music/patriotic/` — патриотическая музыка
+> - `music/space/` — тема "Космос"
+> - `music/classical/` — классическая музыка
+> 
+> Меняйте папку в настройках каждую неделю под текущую тему!
 
 ## 🎨 Темы
 

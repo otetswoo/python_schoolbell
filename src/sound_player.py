@@ -55,6 +55,7 @@ class SoundPlayer:
             return False
     
     def play_music(self, track_path):
+        """Воспроизведение музыки через тот же процесс"""
         if not track_path or not Path(track_path).exists():
             return False
         
@@ -80,6 +81,7 @@ class SoundPlayer:
             return False
     
     def stop_all(self):
+        """Остановка любого воспроизведения (звонка или музыки)"""
         if self.current_process:
             try:
                 self.current_process.terminate()

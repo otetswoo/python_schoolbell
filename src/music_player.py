@@ -8,12 +8,16 @@ from src.config import MUSIC_DIR
 
 
 class MusicPlayer:
-    def __init__(self):
+    def __init__(self, sound_player=None):
         self.music_folder = None
         self.played_today = set()
         self.last_play_time = 0
         self.delay_minutes = 2
-        self.current_process = None
+        self.sound_player = sound_player
+        
+    def set_sound_player(self, sound_player):
+        """Устанавливает общий экземпляр SoundPlayer для управления воспроизведением"""
+        self.sound_player = sound_player
         
     def set_music_folder(self, folder):
         if folder and Path(folder).exists():
@@ -62,23 +66,13 @@ class MusicPlayer:
             self.set_music_folder(folder)
         
         track = self.get_next_track()
-        if track:
-            from src.sound_player import SoundPlayer
-            player = SoundPlayer()
-            player.play_music(str(track))
+        if track and self.sound_player:
+            self.sound_player.play_music(str(track))
             self.mark_played()
             return True
         return False
     
     def stop(self):
-        if self.current_process:
-            try:
-                self.current_process.terminate()
-                self.current_process.wait(timeout=2)
-            except:
-                try:
-                    self.current_process.kill()
-                except:
-                    pass
-            finally:
-                self.current_process = None
+        """Остановка музыки через общий SoundPlayer"""
+        if self.sound_player:
+            self.sound_player.stop_all()

@@ -1,7 +1,12 @@
-last_saved: '2026-05-08T13:31:44.353841'
+last_saved: '2026-05-08T21:19:33.614352'
+music:
+  delay_minutes: 2
+  enabled: true
+  folder: /mnt/files/Музыка/user- Русский рок
 sounds:
   end: sounds/Ringinout.wav
-  start: sounds/Ringin.wav
+  start: /home/oldnetbook/python_schoolbell/sounds/Ringin.wav
+theme: light
 variants:
   friday: usual
   monday: usual

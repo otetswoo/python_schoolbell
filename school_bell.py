@@ -55,6 +55,10 @@ LOCALIZATION = {
         "chk_bells": "Звонки",
         "chk_music": "Музыка на переменах",
         "btn_today": "📅 Сегодня",
+        "btn_bell": "🔔 Звонок",
+        "btn_music": "🎵 Музыка",
+        "confirm_exit_title": "Подтверждение выхода",
+        "confirm_exit_text": "Вы уверены, что хотите выйти из программы?",
     },
     "en": {
         "app_title": "School Bell",
@@ -75,6 +79,10 @@ LOCALIZATION = {
         "chk_bells": "Bells",
         "chk_music": "Break Music",
         "btn_today": "📅 Today",
+        "btn_bell": "🔔 Bell",
+        "btn_music": "🎵 Music",
+        "confirm_exit_title": "Confirm Exit",
+        "confirm_exit_text": "Are you sure you want to exit the program?",
     }
 }
 
@@ -166,6 +174,14 @@ class SchoolBell(QMainWindow):
         self.today_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_today"])
         self.today_btn.clicked.connect(self.set_today_schedule)
         controls_layout.addWidget(self.today_btn)
+        
+        self.bell_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_bell"])
+        self.bell_btn.clicked.connect(self.manual_bell)
+        controls_layout.addWidget(self.bell_btn)
+        
+        self.music_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_music"])
+        self.music_btn.clicked.connect(self.manual_music)
+        controls_layout.addWidget(self.music_btn)
         
         layout.addLayout(controls_layout)
         
@@ -550,9 +566,33 @@ class SchoolBell(QMainWindow):
         self.config.preferences["music"] = music_settings
         self.config.save_preferences(self.config.preferences)
     
+    def manual_bell(self):
+        now = datetime.datetime.now()
+        self.sound_player.play("start", self.sounds.get("start", ""))
+        self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
+    
+    def manual_music(self):
+        music_settings = self.config.get_music_settings()
+        folder = music_settings.get("folder", "")
+        if folder:
+            self.music_player.play_random(folder)
+            self.status_label.setText(f"🎵 {LOCALIZATION[self.current_locale]['btn_music'].replace('🎵', '').strip()}!")
+        else:
+            QMessageBox.warning(self, "Ошибка", "Папка с музыкой не выбрана. Выберите в Настройки → Музыка на переменах")
+    
     def closeEvent(self, event):
-        self.config.save_preferences(self.config.preferences)
-        super().closeEvent(event)
+        reply = QMessageBox.question(
+            self,
+            LOCALIZATION[self.current_locale]["confirm_exit_title"],
+            LOCALIZATION[self.current_locale]["confirm_exit_text"],
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.config.save_preferences(self.config.preferences)
+            event.accept()
+        else:
+            event.ignore()
 
 
 class ScheduleEditorDialog(QDialog):

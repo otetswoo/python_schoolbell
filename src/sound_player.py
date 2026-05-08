@@ -12,6 +12,7 @@ class SoundPlayer:
     def __init__(self):
         self.last_played = {"start": 0.0, "end": 0.0}
         self.min_interval = 60
+        self.current_process = None
     
     def play(self, sound_path, sound_type="auto"):
         if not sound_path or not Path(sound_path).exists():
@@ -31,20 +32,20 @@ class SoundPlayer:
                     from PySide6.QtMultimedia import QSound
                     QSound.play(str(sound_path))
                 except:
-                    subprocess.Popen(
+                    self.current_process = subprocess.Popen(
                         ["powershell", "-Command", f'(New-Object Media.SoundPlayer "{sound_path}").PlaySync()'],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                     )
             else:
                 if ext == ".wav":
-                    subprocess.Popen(["aplay", str(sound_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.current_process = subprocess.Popen(["aplay", str(sound_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 elif ext in (".mp3", ".ogg", ".flac"):
-                    subprocess.Popen(
+                    self.current_process = subprocess.Popen(
                         ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(sound_path)],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                     )
                 else:
-                    subprocess.Popen(["aplay", str(sound_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.current_process = subprocess.Popen(["aplay", str(sound_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             self.last_played[sound_type] = now
             return True
@@ -64,16 +65,29 @@ class SoundPlayer:
                 os.startfile(str(track_path))
             else:
                 if ext == ".wav":
-                    subprocess.Popen(["aplay", str(track_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.current_process = subprocess.Popen(["aplay", str(track_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 elif ext in (".mp3", ".ogg", ".flac", ".m4a"):
-                    subprocess.Popen(
+                    self.current_process = subprocess.Popen(
                         ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(track_path)],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                     )
                 else:
-                    subprocess.Popen(["aplay", str(track_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.current_process = subprocess.Popen(["aplay", str(track_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             return True
         except Exception as e:
             print(f"Error playing music: {e}")
             return False
+    
+    def stop_all(self):
+        if self.current_process:
+            try:
+                self.current_process.terminate()
+                self.current_process.wait(timeout=2)
+            except:
+                try:
+                    self.current_process.kill()
+                except:
+                    pass
+            finally:
+                self.current_process = None

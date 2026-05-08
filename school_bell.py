@@ -100,7 +100,6 @@ def time_to_dt(today: datetime.date, t: str) -> datetime.datetime:
 
 # ------------------ CheckableMenu (from your file) ------------------
 class CheckableMenu(QMenu):
-    """Меню с выбором одного пункта (radio button style)"""
     optionSelected = Signal(str)
     
     def __init__(self, parent=None):
@@ -109,7 +108,6 @@ class CheckableMenu(QMenu):
         self.current_action = None
         
     def add_checkable_action(self, text, icon=None):
-        """Добавить кликабельное действие в меню"""
         action = QAction(text, self)
         if icon:
             action.setIcon(icon)
@@ -120,7 +118,6 @@ class CheckableMenu(QMenu):
         return action
         
     def on_action_triggered(self, triggered_action):
-        """Обработка выбора действия"""
         if triggered_action.isChecked():
             # Снимаем галочки с других действий
             for action in self.actions_group:

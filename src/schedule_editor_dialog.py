@@ -3,18 +3,21 @@
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget,
-    QListWidgetItem, QDialogButtonBox
+    QListWidgetItem, QDialogButtonBox, QMenu, QMessageBox
 )
 
 from src.lesson_dialog import LessonDialog
-from src.config import WEEK_DAYS_RU
+from src.config import WEEK_DAYS_RU, WEEK_DAYS
 
 
 class ScheduleEditorDialog(QDialog):
-    def __init__(self, parent, day_ru, variant, lessons):
+    def __init__(self, parent, day_ru, variant, lessons, schedule_variants=None):
         super().__init__(parent)
         self.setWindowTitle(f"Редактор: {day_ru} ({variant})")
         self.resize(500, 400)
+        
+        self.parent_window = parent
+        self.schedule_variants = schedule_variants or {}
         
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -39,15 +42,32 @@ class ScheduleEditorDialog(QDialog):
         del_btn.clicked.connect(self.delete_lesson)
         btn_layout.addWidget(del_btn)
         
+        clear_btn = QPushButton("🗑️ Очистить день")
+        clear_btn.clicked.connect(self.clear_day)
+        btn_layout.addWidget(clear_btn)
+        
         btn_layout.addStretch()
         
-        up_btn = QPushButton("↑")
-        up_btn.clicked.connect(self.move_up)
-        btn_layout.addWidget(up_btn)
+        # Кнопка "Вставить из" с меню
+        paste_btn = QPushButton("📋 Вставить из")
+        paste_menu = QMenu(self)
         
-        down_btn = QPushButton("↓")
-        down_btn.clicked.connect(self.move_down)
-        btn_layout.addWidget(down_btn)
+        # Шаблоны
+        templates_menu = paste_menu.addMenu("📚 Шаблоны")
+        if "usual" in self.schedule_variants.get(WEEK_DAYS[0], {}):
+            templates_menu.addAction("Обычное расписание").triggered.connect(lambda: self.paste_from_template("usual"))
+        if "short" in self.schedule_variants.get(WEEK_DAYS[0], {}):
+            templates_menu.addAction("Сокращённое расписание").triggered.connect(lambda: self.paste_from_template("short"))
+        
+        paste_menu.addSeparator()
+        
+        # Дни недели
+        days_menu = paste_menu.addMenu("📅 Дни недели")
+        for i, day in enumerate(WEEK_DAYS_RU):
+            days_menu.addAction(day).triggered.connect(lambda checked=False, d=day: self.paste_from_day(d))
+        
+        paste_btn.setMenu(paste_menu)
+        btn_layout.addWidget(paste_btn)
         
         layout.addLayout(btn_layout)
         
@@ -84,6 +104,49 @@ class ScheduleEditorDialog(QDialog):
         if idx < 0:
             return
         self.lessons.pop(idx)
+        self.renumber()
+        self.refresh()
+    
+    def clear_day(self):
+        reply = QMessageBox.question(self, "Подтверждение", 
+                                    "Вы уверены, что хотите очистить расписание этого дня?",
+                                    QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.lessons = []
+            self.refresh()
+    
+    def paste_from_template(self, template_name):
+        """Вставить расписание из шаблона"""
+        # Берем шаблон из любого дня (они одинаковые)
+        for key in WEEK_DAYS:
+            if key in self.schedule_variants and template_name in self.schedule_variants[key]:
+                template = self.schedule_variants[key][template_name]
+                self.lessons = [dict(l) for l in template]
+                self.renumber()
+                self.refresh()
+                return
+        QMessageBox.warning(self, "Ошибка", "Шаблон не найден")
+    
+    def paste_from_day(self, day_ru):
+        """Вставить расписание из другого дня"""
+        if day_ru not in WEEK_DAYS_RU:
+            return
+        
+        idx = WEEK_DAYS_RU.index(day_ru)
+        key = WEEK_DAYS[idx]
+        
+        # Получаем вариант для этого дня из родительского окна
+        if hasattr(self.parent_window, 'day_variants'):
+            variant = self.parent_window.day_variants.get(day_ru, "usual")
+        else:
+            variant = "usual"
+        
+        source_lessons = self.schedule_variants.get(key, {}).get(variant, [])
+        if not source_lessons:
+            QMessageBox.information(self, "Информация", f"Расписание для {day_ru} пустое")
+            return
+        
+        self.lessons = [dict(l) for l in source_lessons]
         self.renumber()
         self.refresh()
     

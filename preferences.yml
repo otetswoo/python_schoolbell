@@ -1,9 +1,7 @@
 last_saved: '2026-05-08T13:31:44.353841'
 sounds:
-  end: /mnt/files/Yandex.Disk/Школа/Кружки/Python-кружок/Python-Подача_звонков/Мелодии
-    звонков/Ringinout.wav
-  start: /mnt/files/Yandex.Disk/Школа/Кружки/Python-кружок/Python-Подача_звонков/Мелодии
-    звонков/Ringin.wav
+  end: sounds/Ringinout.wav
+  start: sounds/Ringin.wav
 variants:
   friday: usual
   monday: usual
@@ -12,10 +10,3 @@ variants:
   thursday: usual
   tuesday: usual
   wednesday: usual
-  Воскресенье: none
-  Вторник: usual
-  Понедельник: usual
-  Пятница: usual
-  Среда: usual
-  Суббота: none
-  Четверг: usual

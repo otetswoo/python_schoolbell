@@ -8,9 +8,10 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QLabel, QMenu, QFileDialog, QMessageBox,
-    QHeaderView, QMenuBar, QDialog
+    QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
+    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox
 )
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtGui import QAction, QColor, QFont, QPalette
 from PySide6.QtCore import Qt, QTimer
 
 from src.config import (
@@ -23,11 +24,16 @@ from src.music_player import MusicPlayer
 from src.lesson_dialog import LessonDialog
 from src.music_settings_dialog import MusicSettingsDialog
 from src.theme_dialog import ThemeDialog
+from src.schedule_editor_dialog import ScheduleEditorDialog
 
 
-COLOR_CURRENT = QColor("#c8e6c9")
-COLOR_SOON = QColor("#fff9c4")
-COLOR_NORMAL = QColor("#ffffff")
+COLOR_CURRENT_LIGHT = QColor("#c8e6c9")
+COLOR_SOON_LIGHT = QColor("#fff9c4")
+COLOR_NORMAL_LIGHT = QColor("#ffffff")
+
+COLOR_CURRENT_DARK = QColor("#2e7d32")
+COLOR_SOON_DARK = QColor("#f9a825")
+COLOR_NORMAL_DARK = QColor("#3c3c3c")
 
 LOCALIZATION = {
     "ru": {
@@ -46,6 +52,9 @@ LOCALIZATION = {
         "action_locale_en": "English",
         "btn_edit": "Редактировать расписание",
         "status_ready": "Готов к работе",
+        "chk_bells": "Звонки",
+        "chk_music": "Музыка на переменах",
+        "btn_today": "📅 Сегодня",
     },
     "en": {
         "app_title": "School Bell",
@@ -63,6 +72,9 @@ LOCALIZATION = {
         "action_locale_en": "English",
         "btn_edit": "Edit Schedule",
         "status_ready": "Ready",
+        "chk_bells": "Bells",
+        "chk_music": "Break Music",
+        "btn_today": "📅 Today",
     }
 }
 
@@ -89,6 +101,8 @@ class SchoolBell(QMainWindow):
         self.current_variant = "usual"
         
         self.scheduled_music = {}
+        self.bells_enabled = True
+        self.music_enabled = False
         
         self.init_ui()
         self.load_data()
@@ -133,6 +147,27 @@ class SchoolBell(QMainWindow):
             self.days_layout.addWidget(btn)
             self.day_buttons[full] = btn
         layout.addLayout(self.days_layout)
+        
+        controls_layout = QHBoxLayout()
+        
+        self.bells_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_bells"])
+        self.bells_checkbox.setChecked(True)
+        self.bells_checkbox.stateChanged.connect(self.on_bells_toggled)
+        controls_layout.addWidget(self.bells_checkbox)
+        
+        self.music_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_music"])
+        music_settings = self.config.get_music_settings()
+        self.music_checkbox.setChecked(music_settings.get("enabled", False))
+        self.music_checkbox.stateChanged.connect(self.on_music_toggled)
+        controls_layout.addWidget(self.music_checkbox)
+        
+        controls_layout.addStretch()
+        
+        self.today_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_today"])
+        self.today_btn.clicked.connect(self.set_today_schedule)
+        controls_layout.addWidget(self.today_btn)
+        
+        layout.addLayout(controls_layout)
         
         self.table = QTableWidget(0, 3)
         headers = ["Начало", "Конец", "Урок"] if self.current_locale == "ru" else ["Start", "End", "Lesson"]
@@ -278,12 +313,23 @@ class SchoolBell(QMainWindow):
     
     def update_ui(self):
         now = datetime.datetime.now()
-        status = f"{now.strftime('%d.%m.%Y %H:%M:%S')}"
+        
+        day_names_ru = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+        day_names_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        day_name = day_names_ru[now.weekday()] if self.current_locale == "ru" else day_names_en[now.weekday()]
+        
+        month_names_ru = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+        month_names_en = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        month_name = month_names_ru[now.month - 1] if self.current_locale == "ru" else month_names_en[now.month - 1]
+        
+        time_str = now.strftime("%H:%M")
+        status = f"{LOCALIZATION[self.current_locale]['btn_today'].replace('📅', '').strip()} {day_name}, {now.day} {month_name} {time_str}"
         
         cur, seconds_left, _ = self.get_current_lesson(now)
         if cur:
             mins = seconds_left // 60
-            status += f"   |   Урок {cur.get('num')}, до конца {mins} мин"
+            lesson_text = f"Урок {cur.get('num')}" if self.current_locale == "ru" else f"Lesson {cur.get('num')}"
+            status += f"   |   {lesson_text}, {mins} мин" if self.current_locale == "ru" else f"   |   {lesson_text}, {mins} min"
         
         self.status_label.setText(status)
         self.highlight_table(now)
@@ -320,6 +366,11 @@ class SchoolBell(QMainWindow):
         rows = self.table.rowCount()
         today = now.date()
         
+        is_dark = self.current_theme == "dark"
+        color_current = COLOR_CURRENT_DARK if is_dark else COLOR_CURRENT_LIGHT
+        color_soon = COLOR_SOON_DARK if is_dark else COLOR_SOON_LIGHT
+        color_normal = COLOR_NORMAL_DARK if is_dark else COLOR_NORMAL_LIGHT
+        
         for r in range(rows):
             try:
                 start_str = self.table.item(r, 0).text()
@@ -328,11 +379,11 @@ class SchoolBell(QMainWindow):
                 start = datetime.datetime.combine(today, datetime.time.fromisoformat(start_str.replace(":", ":00")))
                 end = datetime.datetime.combine(today, datetime.time.fromisoformat(end_str.replace(":", ":00")))
                 
-                bg = COLOR_NORMAL
+                bg = color_normal
                 if start <= now <= end:
-                    bg = COLOR_CURRENT
+                    bg = color_current
                 elif 0 <= (start - now).total_seconds() <= 120:
-                    bg = COLOR_SOON
+                    bg = color_soon
                 
                 for c in range(3):
                     item = self.table.item(r, c)
@@ -348,6 +399,9 @@ class SchoolBell(QMainWindow):
                 continue
     
     def play_bell(self, bell_type, event_time):
+        if not self.bells_enabled:
+            return
+        
         now_ts = datetime.datetime.now().timestamp()
         event_ts = event_time.timestamp()
         
@@ -359,7 +413,7 @@ class SchoolBell(QMainWindow):
         if path and self.sound_player.play(path, bell_type):
             self.scheduled_music[cache_key] = True
             
-            if bell_type == "end":
+            if bell_type == "end" and self.music_enabled:
                 music_time = event_time + datetime.timedelta(minutes=2)
                 music_key = f"music_{music_time.strftime('%H%M')}"
                 if music_key not in self.scheduled_music:
@@ -451,12 +505,16 @@ class SchoolBell(QMainWindow):
             self.setStyleSheet("""
                 QMainWindow { background-color: #2b2b2b; color: #ffffff; }
                 QTableWidget { background-color: #3c3c3c; color: #ffffff; gridline-color: #555; }
-                QHeaderView::section { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; }
+                QHeaderView::section { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; padding: 4px; }
                 QPushButton { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; padding: 6px; }
                 QPushButton:hover { background-color: #5a5a5a; }
                 QLabel { color: #ffffff; }
                 QMenuBar { background-color: #3c3c3c; color: #ffffff; }
                 QMenu { background-color: #3c3c3c; color: #ffffff; }
+                QCheckBox { color: #ffffff; }
+                QCheckBox::indicator { background-color: #555; border: 1px solid #777; }
+                QCheckBox::indicator:checked { background-color: #4caf50; }
+                QStatusBar, QLabel#status { background-color: #3c3c3c; color: #ffffff; }
             """)
         else:
             self.setStyleSheet("")
@@ -475,9 +533,22 @@ class SchoolBell(QMainWindow):
         
         self.edit_btn.setText(texts["btn_edit"])
         self.status_label.setText(texts["status_ready"])
+        self.bells_checkbox.setText(texts["chk_bells"])
+        self.music_checkbox.setText(texts["chk_music"])
+        self.today_btn.setText(texts["btn_today"])
         
         headers = ["Начало", "Конец", "Урок"] if locale == "ru" else ["Start", "End", "Lesson"]
         self.table.setHorizontalHeaderLabels(headers)
+    
+    def on_bells_toggled(self, state):
+        self.bells_enabled = (state == Qt.Checked)
+    
+    def on_music_toggled(self, state):
+        self.music_enabled = (state == Qt.Checked)
+        music_settings = self.config.get_music_settings()
+        music_settings["enabled"] = self.music_enabled
+        self.config.preferences["music"] = music_settings
+        self.config.save_preferences(self.config.preferences)
     
     def closeEvent(self, event):
         self.config.save_preferences(self.config.preferences)

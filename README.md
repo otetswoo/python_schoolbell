@@ -17,7 +17,7 @@
 ### Установка в одну команду
 
 ```bash
-pip install PySide6 pyyaml && git clone https://github.com/YOUR_USERNAME/school_bell.git && cd school_bell && python school_bell.py
+pip install PySide6 pyyaml && git clone https://github.com/otetswoo/python_schoolbell.git && cd school_bell && python school_bell.py
 ```
 
 ### Требования

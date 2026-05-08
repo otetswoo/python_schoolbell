@@ -43,9 +43,10 @@ LOCALIZATION = {
         "menu_edit": "Редактировать",
         "action_load": "Загрузить расписание",
         "action_save": "Сохранить расписание",
-        "action_today": "Сегодня",
         "action_exit": "Выход",
-        "action_sounds": "Звуки",
+        "action_sounds_start": "На урок",
+        "action_sounds_end": "С урока",
+        "menu_sounds": "Мелодии звонков",
         "action_music": "Музыка на переменах",
         "action_theme": "Тема",
         "action_locale_ru": "Русский",
@@ -57,6 +58,7 @@ LOCALIZATION = {
         "btn_today": "📅 Сегодня",
         "btn_bell": "🔔 Звонок",
         "btn_music": "🎵 Музыка",
+        "btn_stop": "🛑 Стоп",
         "confirm_exit_title": "Подтверждение выхода",
         "confirm_exit_text": "Вы уверены, что хотите выйти из программы?",
     },
@@ -67,9 +69,10 @@ LOCALIZATION = {
         "menu_edit": "Edit",
         "action_load": "Load Schedule",
         "action_save": "Save Schedule",
-        "action_today": "Today",
         "action_exit": "Exit",
-        "action_sounds": "Sounds",
+        "action_sounds_start": "Start Lesson",
+        "action_sounds_end": "End Lesson",
+        "menu_sounds": "Bell Melodies",
         "action_music": "Break Music",
         "action_theme": "Theme",
         "action_locale_ru": "Русский",
@@ -81,6 +84,7 @@ LOCALIZATION = {
         "btn_today": "📅 Today",
         "btn_bell": "🔔 Bell",
         "btn_music": "🎵 Music",
+        "btn_stop": "🛑 Stop",
         "confirm_exit_title": "Confirm Exit",
         "confirm_exit_text": "Are you sure you want to exit the program?",
     }
@@ -183,6 +187,10 @@ class SchoolBell(QMainWindow):
         self.music_btn.clicked.connect(self.manual_music)
         controls_layout.addWidget(self.music_btn)
         
+        self.stop_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_stop"])
+        self.stop_btn.clicked.connect(self.manual_stop)
+        controls_layout.addWidget(self.stop_btn)
+        
         layout.addLayout(controls_layout)
         
         self.table = QTableWidget(0, 3)
@@ -219,21 +227,21 @@ class SchoolBell(QMainWindow):
         
         file_menu.addSeparator()
         
-        today_act = QAction(LOCALIZATION[self.current_locale]["action_today"], self)
-        today_act.triggered.connect(self.set_today_schedule)
-        file_menu.addAction(today_act)
-        
-        file_menu.addSeparator()
-        
         exit_act = QAction(LOCALIZATION[self.current_locale]["action_exit"], self)
         exit_act.triggered.connect(self.close)
         file_menu.addAction(exit_act)
         
         settings_menu = menubar.addMenu(LOCALIZATION[self.current_locale]["menu_settings"])
         
-        sounds_act = QAction(LOCALIZATION[self.current_locale]["action_sounds"], self)
-        sounds_act.triggered.connect(self.select_sounds)
-        settings_menu.addAction(sounds_act)
+        sounds_menu = settings_menu.addMenu(LOCALIZATION[self.current_locale]["menu_sounds"])
+        
+        sounds_start_act = QAction(LOCALIZATION[self.current_locale]["action_sounds_start"], self)
+        sounds_start_act.triggered.connect(lambda: self.select_sounds("start"))
+        sounds_menu.addAction(sounds_start_act)
+        
+        sounds_end_act = QAction(LOCALIZATION[self.current_locale]["action_sounds_end"], self)
+        sounds_end_act.triggered.connect(lambda: self.select_sounds("end"))
+        sounds_menu.addAction(sounds_end_act)
         
         music_act = QAction(LOCALIZATION[self.current_locale]["action_music"], self)
         music_act.triggered.connect(self.show_music_settings)
@@ -486,18 +494,21 @@ class SchoolBell(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", str(e))
     
-    def select_sounds(self):
-        start, _ = QFileDialog.getOpenFileName(self, "Звук начала", "", "Audio (*.wav *.mp3)")
-        end, _ = QFileDialog.getOpenFileName(self, "Звук конца", "", "Audio (*.wav *.mp3)")
+    def select_sounds(self, bell_type):
+        title = "Звук начала урока" if bell_type == "start" else "Звук окончания урока"
+        if self.current_locale == "en":
+            title = "Start Lesson Sound" if bell_type == "start" else "End Lesson Sound"
         
-        if start:
-            self.sounds["start"] = start
-            self.config.set_sound("start", start)
-        if end:
-            self.sounds["end"] = end
-            self.config.set_sound("end", end)
-        
-        self.config.save_preferences(self.config.preferences)
+        path, _ = QFileDialog.getOpenFileName(self, title, "", "Audio (*.wav *.mp3)")
+        if path:
+            self.sounds[bell_type] = path
+            self.config.set_sound(bell_type, path)
+            self.config.save_preferences(self.config.preferences)
+            
+            msg = f"Мелодия '{'начала' if bell_type == 'start' else 'окончания'}' установлена"
+            if self.current_locale == "en":
+                msg = f"'{'Start' if bell_type == 'start' else 'End'}' bell melody set"
+            self.status_label.setText(msg)
     
     def show_music_settings(self):
         dlg = MusicSettingsDialog(self, self.config)
@@ -567,10 +578,13 @@ class SchoolBell(QMainWindow):
         self.config.save_preferences(self.config.preferences)
     
     def manual_bell(self):
-        now = datetime.datetime.now()
-        self.sound_player.play("start", self.sounds.get("start", ""))
-        self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
-    
+        path = self.sounds.get("start", "")
+        if path:
+            self.sound_player.play("start", path)
+            self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
+        else:
+            QMessageBox.warning(self, "Ошибка", "Мелодия звонка не выбрана. Выберите в Настройки → Мелодии звонков → На урок")
+
     def manual_music(self):
         music_settings = self.config.get_music_settings()
         folder = music_settings.get("folder", "")
@@ -579,6 +593,11 @@ class SchoolBell(QMainWindow):
             self.status_label.setText(f"🎵 {LOCALIZATION[self.current_locale]['btn_music'].replace('🎵', '').strip()}!")
         else:
             QMessageBox.warning(self, "Ошибка", "Папка с музыкой не выбрана. Выберите в Настройки → Музыка на переменах")
+
+    def manual_stop(self):
+        self.sound_player.stop_all()
+        self.music_player.stop()
+        self.status_label.setText(f"🛑 {LOCALIZATION[self.current_locale]['btn_stop'].replace('🛑', '').strip()}!")
     
     def closeEvent(self, event):
         reply = QMessageBox.question(

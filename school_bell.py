@@ -41,6 +41,7 @@ LOCALIZATION = {
         "menu_file": "Файл",
         "menu_settings": "Настройки",
         "menu_edit": "Редактировать",
+        "menu_help": "Справка",
         "action_load": "Загрузить расписание",
         "action_save": "Сохранить расписание",
         "action_exit": "Выход",
@@ -52,6 +53,7 @@ LOCALIZATION = {
         "action_theme": "Тема",
         "action_locale_ru": "Русский",
         "action_locale_en": "English",
+        "action_about": "О программе",
         "btn_edit": "Редактировать расписание",
         "status_ready": "Готов к работе",
         "chk_bells": "Звонки",
@@ -64,12 +66,19 @@ LOCALIZATION = {
         "btn_stop": "🛑 Стоп",
         "confirm_exit_title": "Подтверждение выхода",
         "confirm_exit_text": "Вы уверены, что хотите выйти из программы?",
+        "about_title": "О программе",
+        "about_text": "<h2>Школьные звонки</h2>"
+                        "<p>Автоматизация школьных звонков с гибким расписанием, музыкой на переменах и темами оформления.</p>"
+                        "<p><b>Версия:</b> 1.0</p>"
+                        "<p><b>Репозиторий GitHub:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
+                        "<p><b>Лицензия:</b> MIT</p>",
     },
     "en": {
         "app_title": "School Bell",
         "menu_file": "File",
         "menu_settings": "Settings",
         "menu_edit": "Edit",
+        "menu_help": "Help",
         "action_load": "Load Schedule",
         "action_save": "Save Schedule",
         "action_exit": "Exit",
@@ -81,6 +90,7 @@ LOCALIZATION = {
         "action_theme": "Theme",
         "action_locale_ru": "Русский",
         "action_locale_en": "English",
+        "action_about": "About",
         "btn_edit": "Edit Schedule",
         "status_ready": "Ready",
         "chk_bells": "Bells",
@@ -93,6 +103,12 @@ LOCALIZATION = {
         "btn_stop": "🛑 Stop",
         "confirm_exit_title": "Confirm Exit",
         "confirm_exit_text": "Are you sure you want to exit the program?",
+        "about_title": "About",
+        "about_text": "<h2>School Bell</h2>"
+                        "<p>School bell automation with flexible schedule, break music and themes.</p>"
+                        "<p><b>Version:</b> 1.0</p>"
+                        "<p><b>GitHub Repository:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
+                        "<p><b>License:</b> MIT</p>",
     }
 }
 
@@ -118,10 +134,14 @@ class SchoolBell(QMainWindow):
         self.current_day = None
         self.current_variant = "usual"
         
+        # Загружаем настройки музыки и гимна перед использованием
+        music_settings = self.config.get_music_settings()
+        anthem_settings = self.config.get_anthem_settings()
+        
         self.scheduled_music = {}
         self.bells_enabled = True
-        self.music_enabled = False
-        self.anthem_enabled = False
+        self.music_enabled = music_settings.get("enabled", False)
+        self.anthem_enabled = anthem_settings.get("enabled", False)
         
         self.init_ui()
         self.load_data()
@@ -299,6 +319,18 @@ class SchoolBell(QMainWindow):
         en_act = QAction(LOCALIZATION[self.current_locale]["action_locale_en"], self)
         en_act.triggered.connect(lambda: self.set_locale("en"))
         locale_menu.addAction(en_act)
+        
+        # Добавляем меню "Справка"
+        help_menu = menubar.addMenu(LOCALIZATION[self.current_locale]["menu_help"])
+        
+        about_act = QAction(LOCALIZATION[self.current_locale]["action_about"], self)
+        about_act.triggered.connect(self.show_about)
+        help_menu.addAction(about_act)
+    
+    def show_about(self):
+        """Показать диалог 'О программе'"""
+        QMessageBox.about(self, LOCALIZATION[self.current_locale]["about_title"], 
+                          LOCALIZATION[self.current_locale]["about_text"])
     
     def show_templates_editor(self):
         """Открыть диалог редактирования шаблонов расписания"""
@@ -488,10 +520,10 @@ class SchoolBell(QMainWindow):
         rows = self.table.rowCount()
         today = now.date()
         
-        is_dark = self.current_theme == "dark"
-        color_current = COLOR_CURRENT_DARK if is_dark else COLOR_CURRENT_LIGHT
-        color_soon = COLOR_SOON_DARK if is_dark else COLOR_SOON_LIGHT
-        color_normal = COLOR_NORMAL_DARK if is_dark else COLOR_NORMAL_LIGHT
+        # Используем только светлую тему - цвета для светлой темы
+        color_current = COLOR_CURRENT_LIGHT
+        color_soon = COLOR_SOON_LIGHT
+        color_normal = COLOR_NORMAL_LIGHT
         
         for r in range(rows):
             try:
@@ -718,6 +750,10 @@ class SchoolBell(QMainWindow):
         
         headers = ["Начало", "Конец", "Урок"] if locale == "ru" else ["Start", "End", "Lesson"]
         self.table.setHorizontalHeaderLabels(headers)
+        
+        # Обновляем меню после смены языка
+        self.menuBar().clear()
+        self.setup_menu()
     
     def on_bells_toggled(self, state):
         self.bells_enabled = (state == Qt.Checked)

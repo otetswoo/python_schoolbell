@@ -311,6 +311,27 @@ class SchoolBell(QMainWindow):
         
         self._update_day_buttons_style()
     
+    def _update_day_buttons_style(self):
+        """Обновляет стиль кнопок дней недели: выделяет текущий день и показывает варианты"""
+        for day_ru, btn in self.day_buttons.items():
+            variant = self.day_variants.get(day_ru, "usual")
+            
+            if day_ru == self.current_day:
+                btn.setChecked(True)
+            else:
+                btn.setChecked(False)
+            
+            # Меняем текст кнопки в зависимости от варианта
+            idx = WEEK_DAYS_RU.index(day_ru)
+            short = WEEK_DAYS_SHORT[idx] if self.current_locale == "ru" else WEEK_DAYS_SHORT_EN[idx]
+            
+            if variant == "short":
+                btn.setText(short + " (К)")
+            elif variant == "none":
+                btn.setText(short + " (X)")
+            else:
+                btn.setText(short)
+    
     def on_day_clicked(self, day_ru):
         """Обработчик клика на день недели - переключает вариант расписания"""
         current_variant = self.day_variants.get(day_ru, "usual")

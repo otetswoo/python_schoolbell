@@ -25,6 +25,7 @@ from src.lesson_dialog import LessonDialog
 from src.music_settings_dialog import MusicSettingsDialog
 from src.theme_dialog import ThemeDialog
 from src.schedule_editor_dialog import ScheduleEditorDialog
+from src.gui.localization import LOCALIZATION
 
 
 COLOR_CURRENT_LIGHT = QColor("#c8e6c9")
@@ -34,87 +35,6 @@ COLOR_NORMAL_LIGHT = QColor("#ffffff")
 COLOR_CURRENT_DARK = QColor("#2e7d32")
 COLOR_SOON_DARK = QColor("#f9a825")
 COLOR_NORMAL_DARK = QColor("#3c3c3c")
-
-LOCALIZATION = {
-    "ru": {
-        "app_title": "Школьные звонки",
-        "menu_file": "Файл",
-        "menu_settings": "Настройки",
-        "menu_edit": "Редактировать",
-        "menu_help": "Справка",
-        "action_load": "Загрузить расписание",
-        "action_save": "Сохранить расписание",
-        "action_exit": "Выход",
-        "action_sounds_start": "На урок",
-        "action_sounds_end": "С урока",
-        "menu_sounds": "Мелодии звонков",
-        "action_music": "Музыка на переменах",
-        "action_anthem": "Гимн",
-        "action_theme": "Тема",
-        "action_locale_ru": "Русский",
-        "action_locale_en": "English",
-        "action_about": "О программе",
-        "btn_edit": "Редактировать расписание",
-        "status_ready": "Готов к работе",
-        "chk_bells": "Звонки",
-        "chk_music": "Музыка на переменах",
-        "chk_anthem": "Гимн",
-        "btn_today": "📅 Сегодня",
-        "btn_bell": "🔔 Звонок",
-        "btn_music": "🎵 Музыка",
-        "btn_anthem": "🎼 Гимн",
-        "btn_stop": "🛑 Стоп",
-        "btn_yes": "Да",
-        "btn_no": "Нет",
-        "confirm_exit_title": "Подтверждение выхода",
-        "confirm_exit_text": "Вы уверены, что хотите выйти из программы?",
-        "about_title": "О программе",
-        "about_text": "<h2>Школьные звонки</h2>"
-                        "<p>Автоматизация школьных звонков с гибким расписанием, музыкой на переменах и темами оформления.</p>"
-                        "<p><b>Версия:</b> 1.0</p>"
-                        "<p><b>Репозиторий GitHub:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
-                        "<p><b>Лицензия:</b> MIT</p>",
-    },
-    "en": {
-        "app_title": "School Bell",
-        "menu_file": "File",
-        "menu_settings": "Settings",
-        "menu_edit": "Edit",
-        "menu_help": "Help",
-        "action_load": "Load Schedule",
-        "action_save": "Save Schedule",
-        "action_exit": "Exit",
-        "action_sounds_start": "Start Lesson",
-        "action_sounds_end": "End Lesson",
-        "menu_sounds": "Bell Melodies",
-        "action_music": "Break Music",
-        "action_anthem": "Anthem",
-        "action_theme": "Theme",
-        "action_locale_ru": "Русский",
-        "action_locale_en": "English",
-        "action_about": "About",
-        "btn_edit": "Edit Schedule",
-        "status_ready": "Ready",
-        "chk_bells": "Bells",
-        "chk_music": "Break Music",
-        "chk_anthem": "Anthem",
-        "btn_today": "📅 Today",
-        "btn_bell": "🔔 Bell",
-        "btn_music": "🎵 Music",
-        "btn_anthem": "🎼 Anthem",
-        "btn_stop": "🛑 Stop",
-        "btn_yes": "Yes",
-        "btn_no": "No",
-        "confirm_exit_title": "Confirm Exit",
-        "confirm_exit_text": "Are you sure you want to exit the program?",
-        "about_title": "About",
-        "about_text": "<h2>School Bell</h2>"
-                        "<p>School bell automation with flexible schedule, break music and themes.</p>"
-                        "<p><b>Version:</b> 1.0</p>"
-                        "<p><b>GitHub Repository:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
-                        "<p><b>License:</b> MIT</p>",
-    }
-}
 
 
 class SchoolBell(QMainWindow):
@@ -138,13 +58,13 @@ class SchoolBell(QMainWindow):
         self.current_day = None
         self.current_variant = "usual"
         
-        # Загружаем настройки музыки и гимна перед использованием
-        music_settings = self.config.get_music_settings()
-        anthem_settings = self.config.get_anthem_settings()
-        
         self.scheduled_music = {}
         self.bells_enabled = True
+        
+        music_settings = self.config.get_music_settings()
         self.music_enabled = music_settings.get("enabled", False)
+        
+        anthem_settings = self.config.get_anthem_settings()
         self.anthem_enabled = anthem_settings.get("enabled", False)
         
         self.init_ui()
@@ -208,8 +128,6 @@ class SchoolBell(QMainWindow):
         self.anthem_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_anthem"])
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
-        # Синхронизируем флаг с состоянием чекбокса
-        self.anthem_enabled = self.anthem_checkbox.isChecked()
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
         top_layout.addWidget(self.anthem_checkbox)
         
@@ -249,7 +167,7 @@ class SchoolBell(QMainWindow):
         self.music_btn.clicked.connect(self.manual_music)
         bottom_layout.addWidget(self.music_btn)
         
-        self.anthem_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_anthem"].replace("🎼", "").strip())
+        self.anthem_btn = QPushButton(self._get_anthem_button_text())
         self.anthem_btn.clicked.connect(self.manual_anthem)
         bottom_layout.addWidget(self.anthem_btn)
         
@@ -391,23 +309,7 @@ class SchoolBell(QMainWindow):
             self.table.setItem(row, 1, QTableWidgetItem(l.get("end", "")))
             self.table.setItem(row, 2, QTableWidgetItem(str(l.get("num", ""))))
         
-        # Обновляем стили кнопок дней в зависимости от варианта расписания
-        for d, btn in self.day_buttons.items():
-            is_selected = d == day_ru
-            day_variant = self.day_variants.get(d, "usual")
-            
-            # Стиль кнопки дня: зеленый - обычное, желтый - сокращенное, красный - нет уроков
-            if is_selected:
-                btn.setStyleSheet("font-weight: bold; border: 2px solid #3584e4;")
-            elif day_variant == "none":
-                # Красный фон для дней без расписания
-                btn.setStyleSheet("background-color: #ffcccc;")
-            elif day_variant == "short":
-                # Желтый фон для сокращенного расписания
-                btn.setStyleSheet("background-color: #fff9c4;")
-            else:
-                # Зеленый фон для обычного расписания
-                btn.setStyleSheet("background-color: #c8e6c9;")
+        self._update_day_buttons_style()
     
     def on_day_clicked(self, day_ru):
         """Обработчик клика на день недели - переключает вариант расписания"""
@@ -418,27 +320,14 @@ class SchoolBell(QMainWindow):
         self.config.set_day_variant(day_ru, next_variant)
         self.config.save_preferences(self.config.preferences)
         
-        # Если это текущий выбранный день, обновляем таблицу
-        if day_ru == self.current_day:
-            self.select_day(day_ru)
-        else:
-            # Просто обновляем стиль кнопки (без изменения выделения)
-            btn = self.day_buttons.get(day_ru)
-            if btn:
-                day_variant = self.day_variants.get(day_ru, "usual")
-                if day_variant == "none":
-                    btn.setStyleSheet("background-color: #ffcccc;")
-                elif day_variant == "short":
-                    btn.setStyleSheet("background-color: #fff9c4;")
-                else:
-                    btn.setStyleSheet("background-color: #c8e6c9;")
+        self._update_day_buttons_style()
     
     def set_today_schedule(self):
         today = datetime.datetime.today()
         idx = today.weekday()
         day_ru = WEEK_DAYS_RU[idx]
-        # Обновляем текст кнопки Сегодня с датой
-        self.today_btn.setText(f"{LOCALIZATION[self.current_locale]['btn_today']} ({today.strftime('%d.%m.%Y')})")
+        # Обновляем текст кнопки Сегодня (только надпись, без даты)
+        self.today_btn.setText(LOCALIZATION[self.current_locale]['btn_today'])
         self.music_player.reset_daily()
         self.scheduled_music.clear()
         self.select_day(day_ru)
@@ -736,12 +625,11 @@ class SchoolBell(QMainWindow):
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
         self.anthem_checkbox.setText(texts["chk_anthem"])
-        # Обновляем текст кнопки Сегодня
-        today = datetime.datetime.now()
-        self.today_btn.setText(f"{texts['btn_today']} ({today.strftime('%d.%m.%Y')})")
+        # Обновляем текст кнопки Сегодня (только надпись, без даты)
+        self.today_btn.setText(texts["btn_today"])
         self.bell_btn.setText("▶️ " + texts["btn_bell"].replace("🔔", "").strip())
         self.music_btn.setText("▶️ " + texts["btn_music"].replace("🎵", "").strip())
-        self.anthem_btn.setText("▶️ " + texts["btn_anthem"].replace("🎼", "").strip())
+        self.anthem_btn.setText(self._get_anthem_button_text())
         self.stop_btn.setText(texts["btn_stop"])
         
         headers = ["Начало", "Конец", "Урок"] if locale == "ru" else ["Start", "End", "Lesson"]
@@ -767,6 +655,7 @@ class SchoolBell(QMainWindow):
         anthem_settings["enabled"] = self.anthem_enabled
         self.config.preferences["anthem"] = anthem_settings
         self.config.save_preferences(self.config.preferences)
+        self.anthem_btn.setText(self._get_anthem_button_text())
     
     def manual_bell(self):
         path = self.sounds.get("start", "")
@@ -811,6 +700,15 @@ class SchoolBell(QMainWindow):
                 self.status_label.setText(f"⚠️ Гимн уже воспроизводится")
         else:
             QMessageBox.warning(self, "Ошибка", "Файл гимна не выбран. Выберите в Настройки → Гимн")
+
+    def _get_anthem_button_text(self):
+        """Возвращает текст кнопки гимна в зависимости от состояния"""
+        texts = LOCALIZATION[self.current_locale]
+        btn_text = texts["btn_anthem"].replace("🎼", "").strip()
+        if self.anthem_enabled:
+            return "▶️ " + btn_text
+        else:
+            return "⏸️ " + btn_text
 
     def manual_stop(self):
         """Остановка воспроизведения звонка, музыки и гимна"""

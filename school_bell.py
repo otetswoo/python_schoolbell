@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox
 )
 from PySide6.QtGui import QAction, QColor, QFont, QPalette
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QEvent
 
 from src.config import (
     WEEK_DAYS, WEEK_DAYS_RU, WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN,
@@ -165,96 +165,94 @@ class SchoolBell(QMainWindow):
         layout = QVBoxLayout()
         central.setLayout(layout)
         
-        # Убраны day_label и variant_label - информация дублируется в других элементах
+        # Верхняя панель: дни недели слева, чекбоксы справа
+        top_layout = QHBoxLayout()
         
+        # Дни недели
         self.days_layout = QHBoxLayout()
         self.day_buttons = {}
-        self.variant_buttons = {}  # Кнопки переключения вариантов для каждого дня
         for i, (short_ru, short_en) in enumerate(zip(WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN)):
             short = short_ru if self.current_locale == "ru" else short_en
             full = WEEK_DAYS_RU[i]
             
             btn = QPushButton(short)
             btn.setMinimumHeight(36)
-            btn.setToolTip(full)
+            btn.setToolTip(full + "\nЛКМ - выбрать день\nПКМ - переключить вариант расписания")
             btn.clicked.connect(lambda checked=False, d=full: self.select_day(d))
+            # Добавляем обработчик для переключения варианта по правому клику
+            btn.setContextMenuPolicy(Qt.CustomContextMenu)
+            btn.customContextMenuRequested.connect(lambda pos, d=full: self.on_day_clicked(d))
             btn.setCheckable(True)
             self.days_layout.addWidget(btn)
             self.day_buttons[full] = btn
             
-            # Переключатель варианта расписания под кнопкой дня
-            variant_combo = QComboBox()
-            variant_names = {"usual": "Обычное", "short": "Сокращ.", "none": "Нет"}
-            if self.current_locale == "en":
-                variant_names = {"usual": "Regular", "short": "Short", "none": "None"}
-            for key, name in variant_names.items():
-                variant_combo.addItem(name, key)
-            variant_combo.setCurrentText(variant_names.get(self.day_variants.get(full, "usual"), "Обычное"))
-            variant_combo.currentIndexChanged.connect(lambda idx, combo=variant_combo, d=full: self.on_variant_changed(d, combo))
-            variant_combo.setToolTip("Вариант расписания")
-            self.days_layout.addWidget(variant_combo)
-            self.variant_buttons[full] = variant_combo
-            
-        layout.addLayout(self.days_layout)
+        top_layout.addLayout(self.days_layout)
+        top_layout.addStretch()
         
-        controls_layout = QHBoxLayout()
-        
+        # Чекбоксы справа
         self.bells_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_bells"])
         self.bells_checkbox.setChecked(True)
         self.bells_checkbox.stateChanged.connect(self.on_bells_toggled)
-        controls_layout.addWidget(self.bells_checkbox)
+        top_layout.addWidget(self.bells_checkbox)
         
         self.music_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_music"])
         music_settings = self.config.get_music_settings()
         self.music_checkbox.setChecked(music_settings.get("enabled", False))
         self.music_checkbox.stateChanged.connect(self.on_music_toggled)
-        controls_layout.addWidget(self.music_checkbox)
+        top_layout.addWidget(self.music_checkbox)
         
         self.anthem_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_anthem"])
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
-        controls_layout.addWidget(self.anthem_checkbox)
+        top_layout.addWidget(self.anthem_checkbox)
         
-        controls_layout.addStretch()
+        layout.addLayout(top_layout)
         
-        self.today_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_today"])
-        self.today_btn.clicked.connect(self.set_today_schedule)
-        controls_layout.addWidget(self.today_btn)
-        
-        self.bell_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_bell"].replace("🔔", "").strip())
-        self.bell_btn.clicked.connect(self.manual_bell)
-        controls_layout.addWidget(self.bell_btn)
-        
-        self.music_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_music"].replace("🎵", "").strip())
-        self.music_btn.clicked.connect(self.manual_music)
-        controls_layout.addWidget(self.music_btn)
-        
-        self.anthem_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_anthem"].replace("🎼", "").strip())
-        self.anthem_btn.clicked.connect(self.manual_anthem)
-        controls_layout.addWidget(self.anthem_btn)
-        
-        self.stop_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_stop"])
-        self.stop_btn.clicked.connect(self.manual_stop)
-        controls_layout.addWidget(self.stop_btn)
-        
-        layout.addLayout(controls_layout)
-        
+        # Таблица расписания (компактная)
         self.table = QTableWidget(0, 3)
         headers = ["Начало", "Конец", "Урок"] if self.current_locale == "ru" else ["Start", "End", "Lesson"]
         self.table.setHorizontalHeaderLabels(headers)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        # Отключаем выделение элементов таблицы
         self.table.setSelectionMode(QTableWidget.NoSelection)
+        # Уменьшаем высоту строк для компактности
+        self.table.verticalHeader().setDefaultSectionSize(28)
         layout.addWidget(self.table)
         
-        edit_layout = QHBoxLayout()
+        # Нижняя панель: кнопка редактирования и кнопки управления
+        bottom_layout = QHBoxLayout()
+        
         self.edit_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_edit"])
         self.edit_btn.clicked.connect(self.edit_schedule)
-        edit_layout.addWidget(self.edit_btn)
-        edit_layout.addStretch()
-        layout.addLayout(edit_layout)
+        bottom_layout.addWidget(self.edit_btn)
+        
+        # Кнопки управления правее
+        self.today_label = QPushButton(datetime.datetime.now().strftime("%d.%m.%Y"))
+        self.today_label.setStyleSheet("text-align: left; border: none; background: transparent;")
+        self.today_label.clicked.connect(self.set_today_schedule)
+        self.today_label.setToolTip("Нажмите для перехода на текущий день")
+        bottom_layout.addWidget(self.today_label)
+        
+        bottom_layout.addStretch()
+        
+        self.bell_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_bell"].replace("🔔", "").strip())
+        self.bell_btn.clicked.connect(self.manual_bell)
+        bottom_layout.addWidget(self.bell_btn)
+        
+        self.music_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_music"].replace("🎵", "").strip())
+        self.music_btn.clicked.connect(self.manual_music)
+        bottom_layout.addWidget(self.music_btn)
+        
+        self.anthem_btn = QPushButton("▶️ " + LOCALIZATION[self.current_locale]["btn_anthem"].replace("🎼", "").strip())
+        self.anthem_btn.clicked.connect(self.manual_anthem)
+        bottom_layout.addWidget(self.anthem_btn)
+        
+        self.stop_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_stop"])
+        self.stop_btn.clicked.connect(self.manual_stop)
+        bottom_layout.addWidget(self.stop_btn)
+        
+        layout.addLayout(bottom_layout)
         
         self.status_label = QLabel(LOCALIZATION[self.current_locale]["status_ready"])
         self.status_label.setStyleSheet("background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
@@ -369,20 +367,6 @@ class SchoolBell(QMainWindow):
                 "short": list(templates.get("short", [])),
                 "none": []
             }
-        
-        # Обновляем переключатели вариантов после загрузки данных
-        self.update_variant_combos()
-    
-    def update_variant_combos(self):
-        """Обновляет значения в комбобоксах вариантов расписания"""
-        for day_ru, combo in self.variant_buttons.items():
-            combo.blockSignals(True)
-            variant = self.day_variants.get(day_ru, "usual")
-            combo_names = {"usual": "Обычное" if self.current_locale == "ru" else "Regular",
-                          "short": "Сокращ." if self.current_locale == "ru" else "Short",
-                          "none": "Нет" if self.current_locale == "ru" else "None"}
-            combo.setCurrentText(combo_names.get(variant, combo_names["usual"]))
-            combo.blockSignals(False)
     
     def select_day(self, day_ru):
         self.current_day = day_ru
@@ -402,49 +386,57 @@ class SchoolBell(QMainWindow):
             self.table.setItem(row, 1, QTableWidgetItem(l.get("end", "")))
             self.table.setItem(row, 2, QTableWidgetItem(str(l.get("num", ""))))
         
-        # Убраны day_label и variant_label - информация дублируется в кнопках дней и переключателях вариантов
-        
-        # Обновляем стили кнопок дней и переключателей вариантов
+        # Обновляем стили кнопок дней в зависимости от варианта расписания
         for d, btn in self.day_buttons.items():
             is_selected = d == day_ru
             day_variant = self.day_variants.get(d, "usual")
             
-            # Стиль кнопки дня
+            # Стиль кнопки дня: зеленый - обычное, желтый - сокращенное, красный - нет уроков
             if is_selected:
-                btn.setStyleSheet("background-color: #e8f5e9; font-weight: bold;")
+                btn.setStyleSheet("font-weight: bold; border: 2px solid #3584e4;")
             elif day_variant == "none":
-                # Красная рамка для дней без расписания
-                btn.setStyleSheet("border: 2px solid red;")
+                # Красный фон для дней без расписания
+                btn.setStyleSheet("background-color: #ffcccc;")
+            elif day_variant == "short":
+                # Желтый фон для сокращенного расписания
+                btn.setStyleSheet("background-color: #fff9c4;")
             else:
-                btn.setStyleSheet("")
-            
-            # Обновляем переключатель варианта
-            if d in self.variant_buttons:
-                combo = self.variant_buttons[d]
-                combo.blockSignals(True)
-                combo_names = {"usual": "Обычное" if self.current_locale == "ru" else "Regular",
-                              "short": "Сокращ." if self.current_locale == "ru" else "Short",
-                              "none": "Нет" if self.current_locale == "ru" else "None"}
-                combo.setCurrentText(combo_names.get(day_variant, combo_names["usual"]))
-                combo.blockSignals(False)
+                # Зеленый фон для обычного расписания
+                btn.setStyleSheet("background-color: #c8e6c9;")
     
-    def on_variant_changed(self, day_ru, combo):
-        """Обработчик изменения варианта расписания для дня"""
-        variant_map = {"Обычное": "usual", "Сокращ.": "short", "Нет": "none",
-                      "Regular": "usual", "Short": "short", "None": "none"}
-        variant = variant_map.get(combo.currentText(), "usual")
-        self.day_variants[day_ru] = variant
-        self.config.set_day_variant(day_ru, variant)
+    def on_day_clicked(self, day_ru):
+        """Обработчик клика на день недели - переключает вариант расписания"""
+        current_variant = self.day_variants.get(day_ru, "usual")
+        # Циклическое переключение: usual -> short -> none -> usual
+        next_variant = {"usual": "short", "short": "none", "none": "usual"}[current_variant]
+        self.day_variants[day_ru] = next_variant
+        self.config.set_day_variant(day_ru, next_variant)
         self.config.save_preferences(self.config.preferences)
         
         # Если это текущий выбранный день, обновляем таблицу
         if day_ru == self.current_day:
             self.select_day(day_ru)
+        else:
+            # Просто обновляем стиль кнопки
+            for d, btn in self.day_buttons.items():
+                is_selected = d == self.current_day
+                day_variant = self.day_variants.get(d, "usual")
+                
+                if is_selected:
+                    btn.setStyleSheet("font-weight: bold; border: 2px solid #3584e4;")
+                elif day_variant == "none":
+                    btn.setStyleSheet("background-color: #ffcccc;")
+                elif day_variant == "short":
+                    btn.setStyleSheet("background-color: #fff9c4;")
+                else:
+                    btn.setStyleSheet("background-color: #c8e6c9;")
     
     def set_today_schedule(self):
         today = datetime.datetime.today()
         idx = today.weekday()
         day_ru = WEEK_DAYS_RU[idx]
+        # Обновляем дату на кнопке
+        self.today_label.setText(today.strftime("%d.%m.%Y"))
         self.music_player.reset_daily()
         self.scheduled_music.clear()
         self.select_day(day_ru)
@@ -742,7 +734,8 @@ class SchoolBell(QMainWindow):
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
         self.anthem_checkbox.setText(texts["chk_anthem"])
-        self.today_btn.setText(texts["btn_today"])
+        # Обновляем дату на кнопке today_label
+        self.today_label.setText(datetime.datetime.now().strftime("%d.%m.%Y"))
         self.bell_btn.setText("▶️ " + texts["btn_bell"].replace("🔔", "").strip())
         self.music_btn.setText("▶️ " + texts["btn_music"].replace("🎵", "").strip())
         self.anthem_btn.setText("▶️ " + texts["btn_anthem"].replace("🎼", "").strip())

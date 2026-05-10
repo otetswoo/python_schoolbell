@@ -64,6 +64,8 @@ LOCALIZATION = {
         "btn_music": "🎵 Музыка",
         "btn_anthem": "🎼 Гимн",
         "btn_stop": "🛑 Стоп",
+        "btn_yes": "Да",
+        "btn_no": "Нет",
         "confirm_exit_title": "Подтверждение выхода",
         "confirm_exit_text": "Вы уверены, что хотите выйти из программы?",
         "about_title": "О программе",
@@ -101,6 +103,8 @@ LOCALIZATION = {
         "btn_music": "🎵 Music",
         "btn_anthem": "🎼 Anthem",
         "btn_stop": "🛑 Stop",
+        "btn_yes": "Yes",
+        "btn_no": "No",
         "confirm_exit_title": "Confirm Exit",
         "confirm_exit_text": "Are you sure you want to exit the program?",
         "about_title": "About",
@@ -204,6 +208,8 @@ class SchoolBell(QMainWindow):
         self.anthem_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_anthem"])
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
+        # Синхронизируем флаг с состоянием чекбокса
+        self.anthem_enabled = self.anthem_checkbox.isChecked()
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
         top_layout.addWidget(self.anthem_checkbox)
         
@@ -228,11 +234,10 @@ class SchoolBell(QMainWindow):
         bottom_layout.addWidget(self.edit_btn)
         
         # Кнопки управления правее
-        self.today_label = QPushButton(datetime.datetime.now().strftime("%d.%m.%Y"))
-        self.today_label.setStyleSheet("text-align: left; border: none; background: transparent;")
-        self.today_label.clicked.connect(self.set_today_schedule)
-        self.today_label.setToolTip("Нажмите для перехода на текущий день")
-        bottom_layout.addWidget(self.today_label)
+        self.today_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_today"])
+        self.today_btn.clicked.connect(self.set_today_schedule)
+        self.today_btn.setToolTip("Нажмите для перехода на текущий день")
+        bottom_layout.addWidget(self.today_btn)
         
         bottom_layout.addStretch()
         
@@ -417,14 +422,11 @@ class SchoolBell(QMainWindow):
         if day_ru == self.current_day:
             self.select_day(day_ru)
         else:
-            # Просто обновляем стиль кнопки
-            for d, btn in self.day_buttons.items():
-                is_selected = d == self.current_day
-                day_variant = self.day_variants.get(d, "usual")
-                
-                if is_selected:
-                    btn.setStyleSheet("font-weight: bold; border: 2px solid #3584e4;")
-                elif day_variant == "none":
+            # Просто обновляем стиль кнопки (без изменения выделения)
+            btn = self.day_buttons.get(day_ru)
+            if btn:
+                day_variant = self.day_variants.get(day_ru, "usual")
+                if day_variant == "none":
                     btn.setStyleSheet("background-color: #ffcccc;")
                 elif day_variant == "short":
                     btn.setStyleSheet("background-color: #fff9c4;")
@@ -435,8 +437,8 @@ class SchoolBell(QMainWindow):
         today = datetime.datetime.today()
         idx = today.weekday()
         day_ru = WEEK_DAYS_RU[idx]
-        # Обновляем дату на кнопке
-        self.today_label.setText(today.strftime("%d.%m.%Y"))
+        # Обновляем текст кнопки Сегодня с датой
+        self.today_btn.setText(f"{LOCALIZATION[self.current_locale]['btn_today']} ({today.strftime('%d.%m.%Y')})")
         self.music_player.reset_daily()
         self.scheduled_music.clear()
         self.select_day(day_ru)
@@ -669,9 +671,9 @@ class SchoolBell(QMainWindow):
                 QLabel { color: #ffffff; }
                 QMenuBar { background-color: #3c3c3c; color: #ffffff; }
                 QMenu { background-color: #3c3c3c; color: #ffffff; }
-                QCheckBox { color: #ffffff; }
-                QCheckBox::indicator { background-color: #555; border: 1px solid #777; }
-                QCheckBox::indicator:checked { background-color: #4caf50; }
+                QCheckBox { color: #ffffff; spacing: 4px; }
+                QCheckBox::indicator { width: 18px; height: 18px; background-color: #555; border: 1px solid #777; border-radius: 3px; }
+                QCheckBox::indicator:checked { background-color: #4caf50; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiLz48L3N2Zz4); }
                 QStatusBar, QLabel#status { background-color: #3c3c3c; color: #ffffff; }
                 QDialog { background-color: #2b2b2b; color: #ffffff; }
                 QDialog QLabel { color: #ffffff; }
@@ -699,9 +701,9 @@ class SchoolBell(QMainWindow):
                 QMenuBar::item:selected { background-color: #ffffff; }
                 QMenu { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
                 QMenu::item:selected { background-color: #ffffff; }
-                QCheckBox { color: #2e3436; }
-                QCheckBox::indicator { background-color: #ffffff; border: 1px solid #cdc7c2; border-radius: 4px; }
-                QCheckBox::indicator:checked { background-color: #3584e4; border-color: #1c71d8; }
+                QCheckBox { color: #2e3436; spacing: 4px; }
+                QCheckBox::indicator { width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cdc7c2; border-radius: 3px; }
+                QCheckBox::indicator:checked { background-color: #3584e4; border-color: #1c71d8; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiLz48L3N2Zz4); }
                 QStatusBar, QLabel#status { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
                 QDialog { background-color: #fafafa; color: #2e3436; }
                 QDialog QLabel { color: #2e3436; }
@@ -734,8 +736,9 @@ class SchoolBell(QMainWindow):
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
         self.anthem_checkbox.setText(texts["chk_anthem"])
-        # Обновляем дату на кнопке today_label
-        self.today_label.setText(datetime.datetime.now().strftime("%d.%m.%Y"))
+        # Обновляем текст кнопки Сегодня
+        today = datetime.datetime.now()
+        self.today_btn.setText(f"{texts['btn_today']} ({today.strftime('%d.%m.%Y')})")
         self.bell_btn.setText("▶️ " + texts["btn_bell"].replace("🔔", "").strip())
         self.music_btn.setText("▶️ " + texts["btn_music"].replace("🎵", "").strip())
         self.anthem_btn.setText("▶️ " + texts["btn_anthem"].replace("🎼", "").strip())
@@ -818,13 +821,18 @@ class SchoolBell(QMainWindow):
         """Остановка всего воспроизведения при закрытии программы"""
         self.sound_player.stop_all()
         
-        reply = QMessageBox.question(
-            self,
+        msg_box = QMessageBox(
+            QMessageBox.Question,
             LOCALIZATION[self.current_locale]["confirm_exit_title"],
             LOCALIZATION[self.current_locale]["confirm_exit_text"],
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            self
         )
+        msg_box.button(QMessageBox.Yes).setText(LOCALIZATION[self.current_locale]["btn_yes"])
+        msg_box.button(QMessageBox.No).setText(LOCALIZATION[self.current_locale]["btn_no"])
+        msg_box.setDefaultButton(QMessageBox.No)
+        
+        reply = msg_box.exec()
         if reply == QMessageBox.Yes:
             self.config.save_preferences(self.config.preferences)
             event.accept()

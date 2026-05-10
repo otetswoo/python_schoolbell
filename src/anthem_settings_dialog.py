@@ -24,10 +24,6 @@ class AnthemSettingsDialog(QDialog):
         info.setWordWrap(True)
         layout.addWidget(info)
         
-        # Чекбокс включения
-        self.enabled_checkbox = QCheckBox("Включить воспроизведение гимна")
-        layout.addWidget(self.enabled_checkbox)
-        
         # Выбор файла
         file_layout = QHBoxLayout()
         self.file_label = QLabel("Файл: не выбран")
@@ -82,7 +78,6 @@ class AnthemSettingsDialog(QDialog):
     
     def load_current_settings(self):
         anthem = self.config.get_anthem_settings()
-        self.enabled_checkbox.setChecked(anthem.get("enabled", False))
         
         file_path = anthem.get("file", "")
         if file_path:
@@ -110,7 +105,6 @@ class AnthemSettingsDialog(QDialog):
     def clear_settings(self):
         self.config.set_anthem_file("")
         self.file_label.setText("Файл: не выбран")
-        self.enabled_checkbox.setChecked(False)
     
     def accept(self):
         # Сохраняем настройки
@@ -121,9 +115,5 @@ class AnthemSettingsDialog(QDialog):
         
         time_str = self.time_edit.time().toString("HH:mm")
         self.config.set_anthem_time(time_str)
-        
-        anthem = self.config.get_anthem_settings()
-        anthem["enabled"] = self.enabled_checkbox.isChecked()
-        self.config.preferences["anthem"] = anthem
         
         super().accept()

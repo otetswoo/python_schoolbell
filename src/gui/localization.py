@@ -33,6 +33,16 @@ LOCALIZATION = {
         "btn_no": "Нет",
         "confirm_exit_title": "Подтверждение выхода",
         "confirm_exit_text": "Вы уверены, что хотите выйти из программы?",
+        "close_to_tray_title": "Закрыть программу?",
+        "close_to_tray_text": "Оставить программу в трее, чтобы расписание продолжало работать?",
+        "close_to_tray_stay": "Остаться в трее",
+        "close_to_tray_exit": "Выйти",
+        "minimized_to_tray": "Приложение свернуто в трей",
+        "missing_bell_sound": "Мелодия звонка не выбрана или не найдена. Выберите звук в настройках.",
+        "missing_music_folder": "Папка с музыкой не выбрана или не найдена. Выберите папку в настройках.",
+        "missing_music_tracks": "В выбранной папке нет аудиофайлов.",
+        "missing_anthem_file": "Файл гимна не выбран или не найден. Выберите файл в настройках.",
+        "missing_anthem_schedule": "День или время гимна не заданы. Проверьте настройки гимна.",
         "about_title": "О программе",
         "about_text": "<h2>Школьные звонки</h2>"
                         "<p>Автоматизация школьных звонков с гибким расписанием, музыкой на переменах и темами оформления.</p>"
@@ -71,6 +81,16 @@ LOCALIZATION = {
         "btn_no": "No",
         "confirm_exit_title": "Confirm Exit",
         "confirm_exit_text": "Are you sure you want to exit the program?",
+        "close_to_tray_title": "Close the program?",
+        "close_to_tray_text": "Keep the program in the tray so the schedule continues to work?",
+        "close_to_tray_stay": "Stay in tray",
+        "close_to_tray_exit": "Exit",
+        "minimized_to_tray": "Application minimized to tray",
+        "missing_bell_sound": "Bell melody is not selected or was not found. Choose a sound in settings.",
+        "missing_music_folder": "Music folder is not selected or was not found. Choose a folder in settings.",
+        "missing_music_tracks": "The selected music folder has no audio files.",
+        "missing_anthem_file": "Anthem file is not selected or was not found. Choose a file in settings.",
+        "missing_anthem_schedule": "Anthem day or time is not set. Check anthem settings.",
         "about_title": "About",
         "about_text": "<h2>School Bell</h2>"
                         "<p>School bell automation with flexible schedule, break music and themes.</p>"

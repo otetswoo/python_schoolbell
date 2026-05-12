@@ -108,8 +108,6 @@ class AnthemSettingsDialog(QDialog):
     
     def accept(self):
         # Сохраняем настройки
-        self.config.set_anthem_file(self.config.get_anthem_settings().get("file", ""))
-        
         day = self.day_combo.currentData()
         self.config.set_anthem_day(day)
         

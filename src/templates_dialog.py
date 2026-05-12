@@ -51,11 +51,8 @@ class TemplatesEditorDialog(QDialog):
         layout = QVBoxLayout()
         widget.setLayout(layout)
         
-        self.list_widgets = {}
-        
         list_widget = QListWidget()
         layout.addWidget(list_widget)
-        self.list_widgets[template_type] = list_widget
         
         # Загружаем текущий шаблон
         lessons = []
@@ -65,20 +62,20 @@ class TemplatesEditorDialog(QDialog):
                 break
         
         self.lessons_data = {template_type: [dict(l) for l in lessons]}
-        self.refresh_list(template_type)
+        self.refresh_list(template_type, list_widget)
         
         btn_layout = QHBoxLayout()
         
         add_btn = QPushButton("➕ Добавить урок")
-        add_btn.clicked.connect(lambda checked=False, t=template_type: self.add_lesson(t))
+        add_btn.clicked.connect(lambda checked=False, t=template_type, lw=list_widget: self.add_lesson(t, lw))
         btn_layout.addWidget(add_btn)
         
         edit_btn = QPushButton("✏️ Изменить")
-        edit_btn.clicked.connect(lambda checked=False, t=template_type: self.edit_lesson(t))
+        edit_btn.clicked.connect(lambda checked=False, t=template_type, lw=list_widget: self.edit_lesson(t, lw))
         btn_layout.addWidget(edit_btn)
         
         del_btn = QPushButton("🗑️ Удалить")
-        del_btn.clicked.connect(lambda checked=False, t=template_type: self.delete_lesson(t))
+        del_btn.clicked.connect(lambda checked=False, t=template_type, lw=list_widget: self.delete_lesson(t, lw))
         btn_layout.addWidget(del_btn)
         
         clear_btn = QPushButton("🧹 Очистить шаблон")
@@ -88,11 +85,18 @@ class TemplatesEditorDialog(QDialog):
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
         
+        # Сохраняем виджет списка в атрибуте для доступа из других методов
+        setattr(self, f"list_widget_{template_type}", list_widget)
+        
         return widget
     
-    def refresh_list(self, template_type):
+    def refresh_list(self, template_type, list_widget=None):
         """Обновляет список уроков для шаблона"""
-        list_widget = self.list_widgets[template_type]
+        if list_widget is None:
+            list_widget = getattr(self, f"list_widget_{template_type}", None)
+        if list_widget is None:
+            return
+        
         list_widget.clear()
         
         lessons = self.lessons_data.get(template_type, [])
@@ -100,17 +104,21 @@ class TemplatesEditorDialog(QDialog):
             item = QListWidgetItem(f"{l.get('num', i+1):>2d} — {l.get('start','--:--')} → {l.get('end','--:--')}")
             list_widget.addItem(item)
     
-    def add_lesson(self, template_type):
+    def add_lesson(self, template_type, list_widget=None):
         dlg = LessonDialog(self)
         if dlg.exec() == QDialog.Accepted:
             if template_type not in self.lessons_data:
                 self.lessons_data[template_type] = []
             self.lessons_data[template_type].append(dlg.get_data())
             self.renumber(template_type)
-            self.refresh_list(template_type)
+            self.refresh_list(template_type, list_widget)
     
-    def edit_lesson(self, template_type):
-        list_widget = self.list_widgets[template_type]
+    def edit_lesson(self, template_type, list_widget=None):
+        if list_widget is None:
+            list_widget = getattr(self, f"list_widget_{template_type}", None)
+        if list_widget is None:
+            return
+        
         idx = list_widget.currentRow()
         if idx < 0 or template_type not in self.lessons_data:
             return
@@ -123,10 +131,14 @@ class TemplatesEditorDialog(QDialog):
         if dlg.exec() == QDialog.Accepted:
             lessons[idx] = dlg.get_data()
             self.renumber(template_type)
-            self.refresh_list(template_type)
+            self.refresh_list(template_type, list_widget)
     
-    def delete_lesson(self, template_type):
-        list_widget = self.list_widgets[template_type]
+    def delete_lesson(self, template_type, list_widget=None):
+        if list_widget is None:
+            list_widget = getattr(self, f"list_widget_{template_type}", None)
+        if list_widget is None:
+            return
+        
         idx = list_widget.currentRow()
         if idx < 0 or template_type not in self.lessons_data:
             return
@@ -137,7 +149,7 @@ class TemplatesEditorDialog(QDialog):
         
         lessons.pop(idx)
         self.renumber(template_type)
-        self.refresh_list(template_type)
+        self.refresh_list(template_type, list_widget)
     
     def clear_template(self, template_type):
         reply = QMessageBox.question(self, "Подтверждение", 

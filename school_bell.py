@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
     QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox
 )
-from PySide6.QtGui import QAction, QColor, QFont, QPalette
+from PySide6.QtGui import QAction, QColor, QFont, QPalette, QKeySequence
 from PySide6.QtCore import Qt, QTimer, QEvent
 
 from src.config import (
@@ -190,16 +190,19 @@ class SchoolBell(QMainWindow):
         
         load_act = QAction(LOCALIZATION[self.current_locale]["action_load"], self)
         load_act.triggered.connect(self.load_schedule)
+        load_act.setShortcut(QKeySequence("Ctrl+O"))
         file_menu.addAction(load_act)
         
         save_act = QAction(LOCALIZATION[self.current_locale]["action_save"], self)
         save_act.triggered.connect(self.save_schedule)
+        save_act.setShortcut(QKeySequence("Ctrl+S"))
         file_menu.addAction(save_act)
         
         file_menu.addSeparator()
         
         exit_act = QAction(LOCALIZATION[self.current_locale]["action_exit"], self)
         exit_act.triggered.connect(self.close)
+        exit_act.setShortcut(QKeySequence("Ctrl+Q"))
         file_menu.addAction(exit_act)
         
         settings_menu = menubar.addMenu(LOCALIZATION[self.current_locale]["menu_settings"])
@@ -247,6 +250,12 @@ class SchoolBell(QMainWindow):
         about_act = QAction(LOCALIZATION[self.current_locale]["action_about"], self)
         about_act.triggered.connect(self.show_about)
         help_menu.addAction(about_act)
+        
+        # Добавляем действие для кнопки "Сегодня" с горячей клавишей Ctrl+T
+        today_act = QAction(LOCALIZATION[self.current_locale]["btn_today"], self)
+        today_act.setShortcut(QKeySequence("Ctrl+T"))
+        today_act.triggered.connect(self.set_today_schedule)
+        self.addAction(today_act)
     
     def show_about(self):
         """Показать диалог 'О программе'"""
@@ -342,6 +351,10 @@ class SchoolBell(QMainWindow):
         self.config.save_preferences(self.config.preferences)
         
         self._update_day_buttons_style()
+        
+        # Если клик был на текущем дне, обновляем таблицу
+        if day_ru == self.current_day:
+            self.select_day(day_ru)
     
     def set_today_schedule(self):
         today = datetime.datetime.today()
@@ -424,10 +437,15 @@ class SchoolBell(QMainWindow):
         rows = self.table.rowCount()
         today = now.date()
         
-        # Используем только светлую тему - цвета для светлой темы
-        color_current = COLOR_CURRENT_LIGHT
-        color_soon = COLOR_SOON_LIGHT
-        color_normal = COLOR_NORMAL_LIGHT
+        # Выбираем цвета в зависимости от темы
+        if self.current_theme == "dark":
+            color_current = COLOR_CURRENT_DARK
+            color_soon = COLOR_SOON_DARK
+            color_normal = COLOR_NORMAL_DARK
+        else:
+            color_current = COLOR_CURRENT_LIGHT
+            color_soon = COLOR_SOON_LIGHT
+            color_normal = COLOR_NORMAL_LIGHT
         
         for r in range(rows):
             try:
@@ -460,9 +478,6 @@ class SchoolBell(QMainWindow):
         if not self.bells_enabled:
             return
         
-        now_ts = datetime.datetime.now().timestamp()
-        event_ts = event_time.timestamp()
-        
         cache_key = f"{bell_type}_{event_time.strftime('%H%M')}"
         if cache_key in self.scheduled_music:
             return
@@ -493,6 +508,9 @@ class SchoolBell(QMainWindow):
         if hasattr(self, 'last_day') and self.last_day != today_key:
             self.set_today_schedule()
         self.last_day = today_key
+        
+        # Проверяем автоматический запуск гимна
+        self.check_anthem(now)
     
     def load_schedule(self):
         fname, _ = QFileDialog.getOpenFileName(self, "Загрузить расписание", "", "YAML (*.yml *.yaml)")
@@ -516,11 +534,11 @@ class SchoolBell(QMainWindow):
                 for i, key in enumerate(WEEK_DAYS):
                     days_out[key] = self.day_variants.get(WEEK_DAYS_RU[i], "usual")
                 
+                # Сохраняем шаблоны (берём из первого дня как базовые)
                 templates = {}
-                for key in WEEK_DAYS:
-                    for var in ["usual", "short"]:
-                        if var not in templates:
-                            templates[var] = self.schedule_variants[key].get(var, [])
+                first_key = WEEK_DAYS[0]
+                for var in ["usual", "short"]:
+                    templates[var] = list(self.schedule_variants.get(first_key, {}).get(var, []))
                 
                 data = {"days": days_out, "schedules": templates, "sounds": self.sounds}
                 with open(fname, "w", encoding="utf-8") as f:
@@ -721,6 +739,42 @@ class SchoolBell(QMainWindow):
                 self.status_label.setText(f"⚠️ Гимн уже воспроизводится")
         else:
             QMessageBox.warning(self, "Ошибка", "Файл гимна не выбран. Выберите в Настройки → Гимн")
+
+    def check_anthem(self, now):
+        """Проверяет, нужно ли автоматически запустить гимн"""
+        if not self.anthem_enabled:
+            return
+        
+        anthem_settings = self.config.get_anthem_settings()
+        file_path = anthem_settings.get("file", "")
+        day = anthem_settings.get("day", "")
+        time_str = anthem_settings.get("time", "")
+        
+        if not file_path or not day or not time_str:
+            return
+        
+        # Проверяем день недели
+        today_key = WEEK_DAYS[now.weekday()]
+        if today_key != day:
+            return
+        
+        # Проверяем время (с точностью до секунды)
+        try:
+            h, m = map(int, time_str.split(":"))
+            anthem_time = now.replace(hour=h, minute=m, second=0, microsecond=0)
+            
+            # Проверяем, что прошло не более 1 секунды с момента времени гимна
+            diff = (now - anthem_time).total_seconds()
+            if 0 <= diff < 1:
+                # Проверяем, не был ли уже сыгран гимн сегодня
+                cache_key = f"anthem_{time_str}"
+                if cache_key not in self.scheduled_music:
+                    self.scheduled_music[cache_key] = True
+                    self.sound_player.stop_all()
+                    self.sound_player.play(file_path, "anthem")
+                    self.status_label.setText("🎼 Гимн!")
+        except:
+            pass
 
     def _get_anthem_button_text(self):
         """Возвращает текст кнопки гимна в зависимости от состояния"""

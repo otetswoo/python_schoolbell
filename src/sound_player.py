@@ -1,129 +1,112 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import platform
-import subprocess
-import time
-import os
 from pathlib import Path
-import datetime
+
+from PySide6.QtCore import QUrl
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
 
 class SoundPlayer:
     def __init__(self, logger=None):
-        self.current_process = None
+        self.player = None
+        self.audio_output = None
+        self.current_type = None
+        self.current_path = None
         self.logger = logger
-    
-    def play(self, sound_path, sound_type="auto", volume=100):
-        """Воспроизведение звука с поддержкой громкости
-        
-        Args:
-            sound_path: Путь к аудиофайлу
-            sound_type: Тип звука (start, end, anthem)
-            volume: Громкость от 0 до 100
-        """
-        if not sound_path or not Path(sound_path).exists():
-            if self.logger:
-                self.logger.log_event("error", f"Sound file not found: {sound_path}")
-            return False
-        
+
+    def _normalize_volume(self, volume):
         try:
-            ext = Path(sound_path).suffix.lower()
-            
-            # Преобразуем громкость в формат ffplay (0-65535)
-            ffplay_volume = int((volume / 100.0) * 65535)
-            
-            if platform.system() == "Windows":
-                try:
-                    from PySide6.QtMultimedia import QSound
-                    QSound.play(str(sound_path))
-                    if self.logger:
-                        self.logger.log_event("bell", f"Played {sound_type}: {Path(sound_path).name} (volume: {volume}%)")
-                except:
-                    self.current_process = subprocess.Popen(
-                        ["powershell", "-Command", f'(New-Object Media.SoundPlayer "{sound_path}").PlaySync()'],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                    )
-                    if self.logger:
-                        self.logger.log_event("bell", f"Played {sound_type}: {Path(sound_path).name}")
-            else:
-                if ext == ".wav":
-                    self.current_process = subprocess.Popen(["aplay", str(sound_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                elif ext in (".mp3", ".ogg", ".flac", ".m4a"):
-                    # Используем ffplay с параметром громкости
-                    self.current_process = subprocess.Popen(
-                        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", 
-                         "-volume", str(ffplay_volume), str(sound_path)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                    )
-                else:
-                    self.current_process = subprocess.Popen(["aplay", str(sound_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                
-                if self.logger:
-                    self.logger.log_event("bell", f"Played {sound_type}: {Path(sound_path).name} (volume: {volume}%)")
-            
+            volume = int(volume)
+        except (TypeError, ValueError):
+            volume = 100
+        return max(0, min(100, volume))
+
+    def _play_file(self, audio_path, sound_type, volume, log_category):
+        """Запускает аудиофайл через QtMultimedia с изменяемой на лету громкостью."""
+        if not audio_path or not Path(audio_path).exists():
+            if self.logger:
+                self.logger.log_event("error", f"Audio file not found: {audio_path}")
+            return False
+
+        try:
+            volume = self._normalize_volume(volume)
+            self.stop_all()
+
+            self.audio_output = QAudioOutput()
+            self.audio_output.setVolume(volume / 100.0)
+
+            self.player = QMediaPlayer()
+            self.player.setAudioOutput(self.audio_output)
+            self.player.setSource(QUrl.fromLocalFile(str(Path(audio_path).resolve())))
+            self.player.mediaStatusChanged.connect(self._on_media_status_changed)
+            self.player.playbackStateChanged.connect(self._on_playback_state_changed)
+
+            self.current_type = sound_type
+            self.current_path = str(audio_path)
+            self.player.play()
+
+            if self.logger:
+                self.logger.log_event(
+                    log_category,
+                    f"Played {sound_type}: {Path(audio_path).name} (volume: {volume}%)",
+                )
             return True
-            
         except Exception as e:
             if self.logger:
                 self.logger.log_event("error", f"Error playing {sound_type}: {e}")
-            print(f"Error playing sound: {e}")
+            print(f"Error playing audio: {e}")
+            self._clear_current()
             return False
-    
-    def play_music(self, track_path, volume=50):
-        """Воспроизведение музыки через тот же процесс с поддержкой громкости
-        
+
+    def _on_media_status_changed(self, status):
+        if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            self._clear_current()
+
+    def _on_playback_state_changed(self, state):
+        if state == QMediaPlayer.PlaybackState.StoppedState:
+            self._clear_current()
+
+    def _clear_current(self):
+        self.current_type = None
+        self.current_path = None
+        self.player = None
+        self.audio_output = None
+
+    def play(self, sound_path, sound_type="auto", volume=100):
+        """Воспроизведение звука с поддержкой громкости.
+
         Args:
-            track_path: Путь к аудиофайлу
+            sound_path: Путь к аудиофайлу
+            sound_type: Тип звука (start, end, anthem, announcement)
             volume: Громкость от 0 до 100
         """
-        if not track_path or not Path(track_path).exists():
+        return self._play_file(sound_path, sound_type, volume, "bell")
+
+    def play_music(self, track_path, volume=50):
+        """Воспроизведение музыки через тот же проигрыватель с поддержкой громкости."""
+        return self._play_file(track_path, "music", volume, "music")
+
+    def set_volume(self, volume):
+        """Меняет громкость текущего воспроизведения без перезапуска файла."""
+        if self.audio_output:
+            volume = self._normalize_volume(volume)
+            self.audio_output.setVolume(volume / 100.0)
             if self.logger:
-                self.logger.log_event("error", f"Music file not found: {track_path}")
-            return False
-        
-        try:
-            ext = Path(track_path).suffix.lower()
-            
-            # Преобразуем громкость в формат ffplay (0-65535)
-            ffplay_volume = int((volume / 100.0) * 65535)
-            
-            if platform.system() == "Windows":
-                os.startfile(str(track_path))
-                if self.logger:
-                    self.logger.log_event("music", f"Played music: {Path(track_path).name}")
-            else:
-                if ext == ".wav":
-                    self.current_process = subprocess.Popen(["aplay", str(track_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                elif ext in (".mp3", ".ogg", ".flac", ".m4a"):
-                    self.current_process = subprocess.Popen(
-                        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet",
-                         "-volume", str(ffplay_volume), str(track_path)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                    )
-                else:
-                    self.current_process = subprocess.Popen(["aplay", str(track_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                
-                if self.logger:
-                    self.logger.log_event("music", f"Played music: {Path(track_path).name} (volume: {volume}%)")
-            
+                self.logger.log_event("volume", f"Volume changed for {self.current_type}: {volume}%")
             return True
-        except Exception as e:
-            if self.logger:
-                self.logger.log_event("error", f"Error playing music: {e}")
-            print(f"Error playing music: {e}")
+        return False
+
+    def is_playing(self, sound_type=None):
+        """Проверяет, запущено ли сейчас воспроизведение указанного типа или любого звука."""
+        if not self.player or not self.current_type:
             return False
-    
+        if sound_type is None:
+            return True
+        return self.current_type == sound_type
+
     def stop_all(self):
-        """Остановка любого воспроизведения (звонка или музыки)"""
-        if self.current_process:
-            try:
-                self.current_process.terminate()
-                self.current_process.wait(timeout=2)
-            except:
-                try:
-                    self.current_process.kill()
-                except:
-                    pass
-            finally:
-                self.current_process = None
+        """Остановка любого воспроизведения (звонка, музыки, гимна или объявления)."""
+        if self.player:
+            self.player.stop()
+        self._clear_current()

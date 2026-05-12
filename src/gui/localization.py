@@ -16,6 +16,7 @@ LOCALIZATION = {
         "menu_sounds": "Мелодии звонков",
         "action_music": "Музыка на переменах",
         "action_anthem": "Гимн",
+        "action_announcement": "Объявления",
         "action_locale_ru": "Русский",
         "action_locale_en": "English",
         "action_about": "О программе",
@@ -32,6 +33,7 @@ LOCALIZATION = {
         "btn_bell": "🔔 Звонок",
         "btn_music": "🎵 Музыка",
         "btn_anthem": "🎼 Гимн",
+        "btn_announcement": "📢 Объявление",
         "btn_stop": "🛑 Стоп",
         "btn_yes": "Да",
         "btn_no": "Нет",
@@ -47,6 +49,9 @@ LOCALIZATION = {
         "missing_music_tracks": "В выбранной папке нет аудиофайлов.",
         "missing_anthem_file": "Файл гимна не выбран или не найден. Выберите файл в настройках.",
         "missing_anthem_schedule": "День или время гимна не заданы. Проверьте настройки гимна.",
+        "missing_announcement_file": "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+        "missing_announcement_schedule": "Дата или время объявления не заданы. Проверьте настройки объявления.",
+        "announcement_playing": "Сейчас воспроизводится объявление. Музыка не будет запущена.",
         "about_title": "О программе",
         "about_text": "<h2>Школьные звонки</h2>"
                         "<p>Автоматизация школьных звонков с гибким расписанием, музыкой на переменах и темами оформления.</p>"
@@ -68,6 +73,7 @@ LOCALIZATION = {
         "menu_sounds": "Bell Melodies",
         "action_music": "Break Music",
         "action_anthem": "Anthem",
+        "action_announcement": "Announcements",
         "action_locale_ru": "Русский",
         "action_locale_en": "English",
         "action_about": "About",
@@ -84,6 +90,7 @@ LOCALIZATION = {
         "btn_bell": "🔔 Bell",
         "btn_music": "🎵 Music",
         "btn_anthem": "🎼 Anthem",
+        "btn_announcement": "📢 Announcement",
         "btn_stop": "🛑 Stop",
         "btn_yes": "Yes",
         "btn_no": "No",
@@ -99,6 +106,9 @@ LOCALIZATION = {
         "missing_music_tracks": "The selected music folder has no audio files.",
         "missing_anthem_file": "Anthem file is not selected or was not found. Choose a file in settings.",
         "missing_anthem_schedule": "Anthem day or time is not set. Check anthem settings.",
+        "missing_announcement_file": "Announcement file is not selected or was not found. Choose a file in settings.",
+        "missing_announcement_schedule": "Announcement date or time is not set. Check announcement settings.",
+        "announcement_playing": "An announcement is playing now. Music will not start.",
         "about_title": "About",
         "about_text": "<h2>School Bell</h2>"
                         "<p>School bell automation with flexible schedule, break music and themes.</p>"

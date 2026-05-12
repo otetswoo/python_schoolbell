@@ -56,6 +56,13 @@ DEFAULT_SCHEDULE = {
         "folder": str(MUSIC_DIR),
         "delay_minutes": 2
     },
+    "announcement": {
+        "enabled": False,
+        "file": "",
+        "date": "",
+        "time": "08:30",
+        "played": False
+    },
     "holidays": [],
     "profiles": {
         "default": {
@@ -67,6 +74,7 @@ DEFAULT_SCHEDULE = {
         "start": 100,
         "end": 100,
         "anthem": 100,
+        "announcement": 100,
         "music": 50
     }
 }

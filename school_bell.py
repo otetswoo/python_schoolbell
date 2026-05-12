@@ -155,7 +155,7 @@ class SchoolBell(QMainWindow):
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
         top_layout.addWidget(self.anthem_checkbox)
 
-        self.announcement_checkbox = QCheckBox(self.tr("chk_announcement", "Объявления"))
+        self.announcement_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_announcement"])
         announcement_settings = self.config.get_announcement_settings()
         self.announcement_checkbox.setChecked(announcement_settings.get("enabled", False))
         self.announcement_checkbox.stateChanged.connect(self.on_announcement_toggled)
@@ -174,8 +174,8 @@ class SchoolBell(QMainWindow):
         self.table.verticalHeader().setDefaultSectionSize(28)
         layout.addWidget(self.table)
 
-        # Регулировка громкости звонков, музыки на переменах, гимна и объявлений
-        self.volume_group = QGroupBox(self.tr("volume_group"))
+        # Регулировка громкости звонков, музыки на переменах и гимна
+        self.volume_group = QGroupBox(LOCALIZATION[self.current_locale]["volume_group"])
         volume_layout = QHBoxLayout()
         self.volume_group.setLayout(volume_layout)
 
@@ -184,7 +184,6 @@ class SchoolBell(QMainWindow):
         self._create_volume_slider(volume_layout, "bell", self.config.get_volume("start"))
         self._create_volume_slider(volume_layout, "music", self.config.get_volume("music"))
         self._create_volume_slider(volume_layout, "anthem", self.config.get_volume("anthem"))
-        self._create_volume_slider(volume_layout, "announcement", self.config.get_volume("announcement"))
         layout.addWidget(self.volume_group)
 
         # Нижняя панель: кнопка редактирования и кнопки управления
@@ -218,7 +217,7 @@ class SchoolBell(QMainWindow):
         self.announcement_btn.clicked.connect(self.manual_announcement)
         bottom_layout.addWidget(self.announcement_btn)
 
-        self.stop_btn = QPushButton(self.tr("btn_stop"))
+        self.stop_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_stop"])
         self.stop_btn.clicked.connect(self.manual_stop)
         bottom_layout.addWidget(self.stop_btn)
 
@@ -237,14 +236,14 @@ class SchoolBell(QMainWindow):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container.setLayout(container_layout)
 
-        name_label = QLabel(self.tr(f"volume_{volume_type}", volume_type))
+        name_label = QLabel(LOCALIZATION[self.current_locale][f"volume_{volume_type}"])
         name_label.setMinimumWidth(70)
         slider = QSlider(Qt.Horizontal)
         slider.setRange(0, 100)
         slider.setSingleStep(5)
         slider.setPageStep(10)
         slider.setValue(value)
-        slider.setToolTip(self.tr(f"volume_{volume_type}", volume_type))
+        slider.setToolTip(LOCALIZATION[self.current_locale][f"volume_{volume_type}"])
 
         value_label = QLabel()
         value_label.setMinimumWidth(42)
@@ -272,12 +271,8 @@ class SchoolBell(QMainWindow):
         if volume_type == "bell":
             self.config.set_volume("start", value)
             self.config.set_volume("end", value)
-            if self.sound_player.current_type in ("start", "end"):
-                self.sound_player.set_volume(value)
         else:
             self.config.set_volume(volume_type, value)
-            if self.sound_player.current_type == volume_type:
-                self.sound_player.set_volume(value)
         self.config.save_preferences(self.config.preferences)
 
     def setup_menu(self):
@@ -322,7 +317,7 @@ class SchoolBell(QMainWindow):
         anthem_act.triggered.connect(self.show_anthem_settings)
         settings_menu.addAction(anthem_act)
 
-        announcement_act = QAction(self.tr("action_announcement", "Объявления"), self)
+        announcement_act = QAction(LOCALIZATION[self.current_locale]["action_announcement"], self)
         announcement_act.triggered.connect(self.show_announcement_settings)
         settings_menu.addAction(announcement_act)
 
@@ -917,7 +912,6 @@ class SchoolBell(QMainWindow):
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
         self.anthem_checkbox.setText(texts["chk_anthem"])
-        self.announcement_checkbox.setText(texts["chk_announcement"])
         self.volume_group.setTitle(texts["volume_group"])
         for volume_type, slider in self.volume_sliders.items():
             slider.setToolTip(texts[f"volume_{volume_type}"])
@@ -1180,7 +1174,7 @@ class SchoolBell(QMainWindow):
             if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
                 self._clear_main_window_message()
                 self.status_label.setText(
-                    f"📢 {self.tr('btn_announcement', '📢 Объявление').replace('📢', '').strip()}!"
+                    f"📢 {LOCALIZATION[self.current_locale]['btn_announcement'].replace('📢', '').strip()}!"
                 )
                 self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
         else:
@@ -1260,7 +1254,8 @@ class SchoolBell(QMainWindow):
 
     def _get_announcement_button_text(self):
         """Возвращает текст кнопки объявления в зависимости от состояния."""
-        btn_text = self.tr("btn_announcement", "📢 Объявление").replace("📢", "").strip()
+        texts = LOCALIZATION[self.current_locale]
+        btn_text = texts["btn_announcement"].replace("📢", "").strip()
         if self.announcement_enabled:
             return "▶️ " + btn_text
         else:

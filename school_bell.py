@@ -23,7 +23,6 @@ from src.sound_player import SoundPlayer
 from src.music_player import MusicPlayer
 from src.lesson_dialog import LessonDialog
 from src.music_settings_dialog import MusicSettingsDialog
-from src.theme_dialog import ThemeDialog
 from src.schedule_editor_dialog import ScheduleEditorDialog
 from src.gui.localization import LOCALIZATION
 
@@ -31,10 +30,6 @@ from src.gui.localization import LOCALIZATION
 COLOR_CURRENT_LIGHT = QColor("#c8e6c9")
 COLOR_SOON_LIGHT = QColor("#fff9c4")
 COLOR_NORMAL_LIGHT = QColor("#ffffff")
-
-COLOR_CURRENT_DARK = QColor("#2e7d32")
-COLOR_SOON_DARK = QColor("#f9a825")
-COLOR_NORMAL_DARK = QColor("#3c3c3c")
 
 
 class SchoolBell(QMainWindow):
@@ -48,7 +43,6 @@ class SchoolBell(QMainWindow):
         self.config.load_preferences()
         
         self.current_locale = self.config.get_locale()
-        self.current_theme = self.config.get_theme()
         
         self.sound_player = SoundPlayer()
         self.music_player = MusicPlayer(sound_player=self.sound_player)
@@ -69,7 +63,6 @@ class SchoolBell(QMainWindow):
         
         self.init_ui()
         self.load_data()
-        self.apply_theme()
         self.set_today_schedule()
         
         self.ui_timer = QTimer()
@@ -224,10 +217,6 @@ class SchoolBell(QMainWindow):
         anthem_act = QAction(LOCALIZATION[self.current_locale]["action_anthem"], self)
         anthem_act.triggered.connect(self.show_anthem_settings)
         settings_menu.addAction(anthem_act)
-        
-        theme_act = QAction(LOCALIZATION[self.current_locale]["action_theme"], self)
-        theme_act.triggered.connect(self.show_theme_dialog)
-        settings_menu.addAction(theme_act)
         
         # Добавляем пункт "Редактировать шаблоны"
         templates_act = QAction("📚 Редактировать шаблоны", self)
@@ -437,15 +426,10 @@ class SchoolBell(QMainWindow):
         rows = self.table.rowCount()
         today = now.date()
         
-        # Выбираем цвета в зависимости от темы
-        if self.current_theme == "dark":
-            color_current = COLOR_CURRENT_DARK
-            color_soon = COLOR_SOON_DARK
-            color_normal = COLOR_NORMAL_DARK
-        else:
-            color_current = COLOR_CURRENT_LIGHT
-            color_soon = COLOR_SOON_LIGHT
-            color_normal = COLOR_NORMAL_LIGHT
+        # Используем только светлую тему
+        color_current = COLOR_CURRENT_LIGHT
+        color_soon = COLOR_SOON_LIGHT
+        color_normal = COLOR_NORMAL_LIGHT
         
         for r in range(rows):
             try:
@@ -578,75 +562,6 @@ class SchoolBell(QMainWindow):
             anthem = self.config.get_anthem_settings()
             self.config.save_preferences(self.config.preferences)
     
-    def show_theme_dialog(self):
-        dlg = ThemeDialog(self, self.config)
-        if dlg.exec() == QDialog.Accepted:
-            theme = dlg.get_theme()
-            self.current_theme = theme
-            self.config.set_theme(theme)
-            self.config.save_preferences(self.config.preferences)
-            self.apply_theme()
-    
-    def apply_theme(self):
-        if self.current_theme == "dark":
-            self.setStyleSheet("""
-                QMainWindow { background-color: #2b2b2b; color: #ffffff; }
-                QTableWidget { background-color: #3c3c3c; color: #ffffff; gridline-color: #555; }
-                QHeaderView::section { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; padding: 4px; }
-                QPushButton { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; padding: 6px; }
-                QPushButton:hover { background-color: #5a5a5a; }
-                QPushButton:checked { background-color: #2e7d32; color: #ffffff; font-weight: bold; }
-                QLabel { color: #ffffff; }
-                QMenuBar { background-color: #3c3c3c; color: #ffffff; }
-                QMenu { background-color: #3c3c3c; color: #ffffff; }
-                QCheckBox { color: #ffffff; spacing: 4px; }
-                QCheckBox::indicator { width: 18px; height: 18px; background-color: #555; border: 1px solid #777; border-radius: 3px; }
-                QCheckBox::indicator:checked { background-color: #4caf50; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiLz48L3N2Zz4); }
-                QStatusBar, QLabel#status { background-color: #3c3c3c; color: #ffffff; }
-                QDialog { background-color: #2b2b2b; color: #ffffff; }
-                QDialog QLabel { color: #ffffff; }
-                QDialog QPushButton { background-color: #4a4a4a; color: #ffffff; border: 1px solid #555; }
-                QDialog QSpinBox, QDialog QLineEdit, QDialog QComboBox { background-color: #3c3c3c; color: #ffffff; border: 1px solid #555; }
-                QSpinBox { background-color: #3c3c3c; color: #ffffff; border: 1px solid #555; }
-                QLineEdit { background-color: #3c3c3c; color: #ffffff; border: 1px solid #555; }
-                QComboBox { background-color: #3c3c3c; color: #ffffff; border: 1px solid #555; }
-                QListWidget { background-color: #3c3c3c; color: #ffffff; border: 1px solid #555; }
-                QFormLayout QLabel { color: #ffffff; }
-            """)
-        else:
-            # Светлая тема в стиле Adwaita Gnome
-            self.setStyleSheet("""
-                QMainWindow { background-color: #fafafa; color: #2e3436; }
-                QTableWidget { background-color: #ffffff; color: #2e3436; gridline-color: #cdc7c2; }
-                QHeaderView::section { background-color: #e8e8e7; color: #2e3436; border: 1px solid #cdc7c2; padding: 4px; font-weight: bold; }
-                QPushButton { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; padding: 6px; border-radius: 6px; }
-                QPushButton:hover { background-color: #ffffff; border-color: #9a9996; }
-                QPushButton:pressed { background-color: #d5d3cf; }
-                QPushButton:checked { background-color: #3584e4; color: #ffffff; font-weight: bold; border-color: #1c71d8; }
-                QPushButton:checked:hover { background-color: #62a0ea; }
-                QLabel { color: #2e3436; }
-                QMenuBar { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
-                QMenuBar::item:selected { background-color: #ffffff; }
-                QMenu { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
-                QMenu::item:selected { background-color: #ffffff; }
-                QCheckBox { color: #2e3436; spacing: 4px; }
-                QCheckBox::indicator { width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cdc7c2; border-radius: 3px; }
-                QCheckBox::indicator:checked { background-color: #3584e4; border-color: #1c71d8; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik05IDE2LjE3TDQuODMgMTJsLTEuNDIgMS40MUw5IDE5IDIxIDdsLTEuNDEtMS40MXoiLz48L3N2Zz4); }
-                QStatusBar, QLabel#status { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
-                QDialog { background-color: #fafafa; color: #2e3436; }
-                QDialog QLabel { color: #2e3436; }
-                QDialog QPushButton { background-color: #f6f5f4; color: #2e3436; border: 1px solid #cdc7c2; }
-                QDialog QSpinBox, QDialog QLineEdit, QDialog QComboBox { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; }
-                QSpinBox { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; }
-                QLineEdit { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; padding: 4px; }
-                QComboBox { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; padding: 4px; }
-                QComboBox::drop-down { border: none; width: 20px; }
-                QComboBox::down-arrow { image: none; border-left: 1px solid #cdc7c2; }
-                QListWidget { background-color: #ffffff; color: #2e3436; border: 1px solid #cdc7c2; }
-                QListWidget::item:selected { background-color: #3584e4; color: #ffffff; }
-                QFormLayout QLabel { color: #2e3436; }
-            """)
-    
     def set_locale(self, locale):
         self.current_locale = locale
         self.config.set_locale(locale)
@@ -701,10 +616,8 @@ class SchoolBell(QMainWindow):
         if path:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.bells_enabled and self.sound_player.play(path, "start"):
+            if self.sound_player.play(path, "start"):
                 self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
-            elif not self.bells_enabled:
-                self.status_label.setText(f"⚠️ Звонки отключены")
             else:
                 self.status_label.setText(f"⚠️ Звонок уже воспроизводится")
         else:
@@ -716,10 +629,8 @@ class SchoolBell(QMainWindow):
         if folder:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.music_enabled and self.music_player.play_random(folder):
+            if self.music_player.play_random(folder):
                 self.status_label.setText(f"🎵 {LOCALIZATION[self.current_locale]['btn_music'].replace('🎵', '').strip()}!")
-            elif not self.music_enabled:
-                self.status_label.setText(f"⚠️ Музыка отключена")
             else:
                 self.status_label.setText(f"⚠️ Музыка уже воспроизводится")
         else:
@@ -731,10 +642,8 @@ class SchoolBell(QMainWindow):
         if path:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.anthem_enabled and self.sound_player.play(path, "anthem"):
+            if self.sound_player.play(path, "anthem"):
                 self.status_label.setText(f"🎼 {LOCALIZATION[self.current_locale]['btn_anthem'].replace('🎼', '').strip()}!")
-            elif not self.anthem_enabled:
-                self.status_label.setText(f"⚠️ Гимн отключен")
             else:
                 self.status_label.setText(f"⚠️ Гимн уже воспроизводится")
         else:

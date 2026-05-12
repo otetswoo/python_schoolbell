@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QLabel, QMenu, QFileDialog, QMessageBox,
     QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
-    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon
+    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon,
+    QSlider
 )
 from PySide6.QtGui import QAction, QColor, QFont, QPalette, QKeySequence, QIcon
 from PySide6.QtCore import Qt, QTimer, QEvent
@@ -154,6 +155,18 @@ class SchoolBell(QMainWindow):
         self.table.verticalHeader().setDefaultSectionSize(28)
         layout.addWidget(self.table)
 
+        # Регулировка громкости звонков, музыки на переменах и гимна
+        self.volume_group = QGroupBox(LOCALIZATION[self.current_locale]["volume_group"])
+        volume_layout = QHBoxLayout()
+        self.volume_group.setLayout(volume_layout)
+
+        self.volume_sliders = {}
+        self.volume_value_labels = {}
+        self._create_volume_slider(volume_layout, "bell", self.config.get_volume("start"))
+        self._create_volume_slider(volume_layout, "music", self.config.get_volume("music"))
+        self._create_volume_slider(volume_layout, "anthem", self.config.get_volume("anthem"))
+        layout.addWidget(self.volume_group)
+
         # Нижняя панель: кнопка редактирования и кнопки управления
         bottom_layout = QHBoxLayout()
 
@@ -192,6 +205,52 @@ class SchoolBell(QMainWindow):
         layout.addWidget(self.status_label)
 
         self.setup_menu()
+
+    def _create_volume_slider(self, parent_layout, volume_type, value):
+        """Создает подписанный ползунок громкости для главного окна."""
+        container = QWidget()
+        container_layout = QHBoxLayout()
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container.setLayout(container_layout)
+
+        name_label = QLabel(LOCALIZATION[self.current_locale][f"volume_{volume_type}"])
+        name_label.setMinimumWidth(70)
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(0, 100)
+        slider.setSingleStep(5)
+        slider.setPageStep(10)
+        slider.setValue(value)
+        slider.setToolTip(LOCALIZATION[self.current_locale][f"volume_{volume_type}"])
+
+        value_label = QLabel()
+        value_label.setMinimumWidth(42)
+        value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._set_volume_label(value_label, value)
+
+        slider.valueChanged.connect(
+            lambda new_value, vt=volume_type, label=value_label: self.on_volume_changed(vt, new_value, label)
+        )
+
+        container_layout.addWidget(name_label)
+        container_layout.addWidget(slider, 1)
+        container_layout.addWidget(value_label)
+        parent_layout.addWidget(container)
+
+        self.volume_sliders[volume_type] = slider
+        self.volume_value_labels[volume_type] = value_label
+
+    def _set_volume_label(self, label, value):
+        label.setText(f"{value}%")
+
+    def on_volume_changed(self, volume_type, value, value_label):
+        """Сохраняет изменения громкости из ползунков главного окна."""
+        self._set_volume_label(value_label, value)
+        if volume_type == "bell":
+            self.config.set_volume("start", value)
+            self.config.set_volume("end", value)
+        else:
+            self.config.set_volume(volume_type, value)
+        self.config.save_preferences(self.config.preferences)
 
     def setup_menu(self):
         menubar = self.menuBar()
@@ -811,6 +870,11 @@ class SchoolBell(QMainWindow):
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
         self.anthem_checkbox.setText(texts["chk_anthem"])
+        self.volume_group.setTitle(texts["volume_group"])
+        for volume_type, slider in self.volume_sliders.items():
+            slider.setToolTip(texts[f"volume_{volume_type}"])
+            name_label = slider.parent().layout().itemAt(0).widget()
+            name_label.setText(texts[f"volume_{volume_type}"])
         # Обновляем текст кнопки Сегодня (только надпись, без даты)
         self.today_btn.setText(texts["btn_today"])
         self.bell_btn.setText("▶️ " + texts["btn_bell"].replace("🔔", "").strip())

@@ -193,9 +193,9 @@ class ConfigManager:
     # Методы для работы с громкостью
     def get_volumes(self):
         """Возвращает настройки громкости для разных типов звуков"""
-        if self.preferences and "volumes" in self.preferences:
-            return self.preferences.get("volumes", DEFAULT_SCHEDULE.get("volumes", {}))
-        return DEFAULT_SCHEDULE.get("volumes", {})
+        volumes = DEFAULT_SCHEDULE.get("volumes", {}).copy()
+        volumes.update(self.preferences.get("volumes", {}))
+        return volumes
     
     def set_volume(self, sound_type, volume):
         """Устанавливает громкость для указанного типа звука (0-100)"""

@@ -4,14 +4,16 @@
 import sys
 import datetime
 from pathlib import Path
+import platform
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QLabel, QMenu, QFileDialog, QMessageBox,
     QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
-    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox
+    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon,
+    QAction as QtAction
 )
-from PySide6.QtGui import QAction, QColor, QFont, QPalette, QKeySequence
+from PySide6.QtGui import QAction, QColor, QFont, QPalette, QKeySequence, QIcon
 from PySide6.QtCore import Qt, QTimer, QEvent
 
 from src.config import (
@@ -25,6 +27,7 @@ from src.lesson_dialog import LessonDialog
 from src.music_settings_dialog import MusicSettingsDialog
 from src.schedule_editor_dialog import ScheduleEditorDialog
 from src.gui.localization import LOCALIZATION
+from src.event_logger import EventLogger
 
 
 COLOR_CURRENT_LIGHT = QColor("#c8e6c9")
@@ -44,22 +47,32 @@ class SchoolBell(QMainWindow):
         
         self.current_locale = self.config.get_locale()
         
-        self.sound_player = SoundPlayer()
-        self.music_player = MusicPlayer(sound_player=self.sound_player)
+        # Инициализация логгера
+        self.logger = EventLogger()
+        self.logger.log_event("info", "Application started")
+        
+        self.sound_player = SoundPlayer(logger=self.logger)
+        self.music_player = MusicPlayer(sound_player=self.sound_player, logger=self.logger)
         
         self.schedule_variants = {}
         self.day_variants = {d: "usual" for d in WEEK_DAYS_RU}
         self.current_day = None
         self.current_variant = "usual"
+        self.last_day = None  # Для отслеживания смены дня
         
         self.scheduled_music = {}
         self.bells_enabled = True
+        self.current_playing_track = None
         
         music_settings = self.config.get_music_settings()
         self.music_enabled = music_settings.get("enabled", False)
         
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_enabled = anthem_settings.get("enabled", False)
+        
+        # Настройки системного трея
+        self.tray_icon = None
+        self.setup_tray_icon()
         
         self.init_ui()
         self.load_data()
@@ -281,7 +294,12 @@ class SchoolBell(QMainWindow):
         if music.get("enabled") and music.get("folder"):
             self.music_player.set_music_folder(music["folder"])
         
-        templates = self.config.schedule_data.get("schedules", DEFAULT_SCHEDULE["schedules"])
+        # Загружаем шаблоны из текущего профиля
+        current_profile = self.config.get_current_profile()
+        templates = self.config.get_profile_schedules(current_profile)
+        if not templates:
+            templates = self.config.schedule_data.get("schedules", DEFAULT_SCHEDULE["schedules"])
+        
         for key in WEEK_DAYS:
             self.schedule_variants[key] = {
                 "usual": list(templates.get("usual", [])),
@@ -351,8 +369,14 @@ class SchoolBell(QMainWindow):
         day_ru = WEEK_DAYS_RU[idx]
         # Обновляем текст кнопки Сегодня (только надпись, без даты)
         self.today_btn.setText(LOCALIZATION[self.current_locale]['btn_today'])
-        self.music_player.reset_daily()
-        self.scheduled_music.clear()
+        
+        # Сбрасываем кэш при смене дня
+        if hasattr(self, 'last_day') and self.last_day != WEEK_DAYS[idx]:
+            self.logger.log_event("info", f"New day: {day_ru}")
+            self.scheduled_music.clear()
+            self.music_player.reset_daily()
+            self.current_playing_track = None
+        
         self.select_day(day_ru)
     
     def edit_schedule(self):
@@ -385,16 +409,45 @@ class SchoolBell(QMainWindow):
         time_str = now.strftime("%H:%M")
         status = f"{LOCALIZATION[self.current_locale]['btn_today'].replace('📅', '').strip()} {day_name}, {now.day} {month_name} {time_str}"
         
-        cur, seconds_left, _ = self.get_current_lesson(now)
+        cur, seconds_left, next_seconds = self.get_current_lesson(now)
+        
+        # Проверяем, не праздник ли сегодня
+        today_date = now.date()
+        if self.config.is_holiday(today_date):
+            holiday_text = " 🎉 " + (LOCALIZATION[self.current_locale].get("holiday", "Праздничный день") if self.current_locale == "ru" else "Holiday")
+            status += holiday_text
+            self.status_label.setText(status)
+            self.highlight_table(now)
+            return
+        
         if cur:
             mins = seconds_left // 60
             lesson_text = f"Урок {cur.get('num')}" if self.current_locale == "ru" else f"Lesson {cur.get('num')}"
             status += f"   |   {lesson_text}, {mins} мин" if self.current_locale == "ru" else f"   |   {lesson_text}, {mins} min"
+        elif next_seconds is not None and next_seconds > 0:
+            # Показываем время до следующего звонка
+            next_mins = next_seconds // 60
+            next_secs = next_seconds % 60
+            if self.current_locale == "ru":
+                status += f"   |   Следующий звонок через {next_mins} мин {next_secs} сек"
+            else:
+                status += f"   |   Next bell in {next_mins} min {next_secs} sec"
+        
+        # Добавляем индикатор текущего воспроизведения
+        if hasattr(self, 'current_playing_track') and self.current_playing_track:
+            track_name = Path(self.current_playing_track).name if self.current_playing_track else ""
+            playing_text = f"   |   ▶️ {track_name}" if self.current_locale == "ru" else f"   |   ▶️ {track_name}"
+            status += playing_text
         
         self.status_label.setText(status)
         self.highlight_table(now)
     
     def get_current_lesson(self, now):
+        """Возвращает текущий урок и информацию о следующем звонке
+        
+        Returns:
+            tuple: (текущий_урок, секунд_осталось, секунд_до_следующего)
+        """
         if not self.current_day:
             return None, None, None
         
@@ -412,10 +465,12 @@ class SchoolBell(QMainWindow):
             except:
                 continue
         
+        # Проверяем, на уроке ли мы сейчас
         for s, e, l in parsed:
             if s <= now <= e:
                 return l, int((e - now).total_seconds()), None
         
+        # Ищем следующий звонок
         for s, e, l in parsed:
             if now < s:
                 return None, None, int((s - now).total_seconds())
@@ -472,20 +527,32 @@ class SchoolBell(QMainWindow):
                     QTimer.singleShot(120000, lambda: self.play_break_music())
     
     def play_break_music(self):
+        """Воспроизведение музыки на перемене"""
         if not self.music_player.music_folder:
             return
         
+        volumes = self.config.get_volumes()
+        music_volume = volumes.get("music", 50)
+        
         track = self.music_player.get_next_track()
         if track and self.music_player.can_play():
-            self.sound_player.play_music(track)
+            self.sound_player.play_music(str(track), volume=music_volume)
             self.music_player.mark_played()
+            self.current_playing_track = str(track)
+            self.logger.log_event("music", f"Break music: {Path(track).name}")
+        else:
+            self.current_playing_track = None
     
     def check_bells(self):
         now = datetime.datetime.now()
         today_key = WEEK_DAYS[now.weekday()]
         
+        # Проверяем смену дня и сбрасываем кэш звонков
         if hasattr(self, 'last_day') and self.last_day != today_key:
-            self.set_today_schedule()
+            self.logger.log_event("info", f"New day: {WEEK_DAYS_RU[WEEK_DAYS.index(today_key)]}")
+            self.scheduled_music.clear()
+            self.music_player.reset_daily()
+            self.current_playing_track = None
         self.last_day = today_key
         
         # Проверяем автоматический запуск гимна
@@ -499,9 +566,19 @@ class SchoolBell(QMainWindow):
         if not self.current_day or not self.bells_enabled:
             return
         
+        # Проверяем, не праздник ли сегодня
+        today_date = now.date()
+        if self.config.is_holiday(today_date):
+            return
+        
         idx = WEEK_DAYS_RU.index(self.current_day)
         key = WEEK_DAYS[idx]
         lessons = self.schedule_variants.get(key, {}).get(self.current_variant, [])
+        
+        # Получаем настройки громкости
+        volumes = self.config.get_volumes()
+        start_volume = volumes.get("start", 100)
+        end_volume = volumes.get("end", 100)
         
         today = now.date()
         for l in lessons:
@@ -517,7 +594,8 @@ class SchoolBell(QMainWindow):
                         path = self.sounds.get("start")
                         if path:
                             self.sound_player.stop_all()
-                            self.sound_player.play(path, "start")
+                            self.sound_player.play(path, "start", volume=start_volume)
+                            self.logger.log_event("bell", f"Start bell: lesson {l.get('num')}")
                 
                 # Проверяем окончание урока (звонок с урока)
                 if 0 <= (now - end).total_seconds() < 0.5:
@@ -527,12 +605,14 @@ class SchoolBell(QMainWindow):
                         path = self.sounds.get("end")
                         if path:
                             self.sound_player.stop_all()
-                            self.sound_player.play(path, "end")
+                            self.sound_player.play(path, "end", volume=end_volume)
+                            self.logger.log_event("bell", f"End bell: lesson {l.get('num')}")
                             
                             # Запускаем музыку на перемене
                             if self.music_enabled:
                                 QTimer.singleShot(120000, lambda: self.play_break_music())
-            except:
+            except Exception as e:
+                self.logger.log_event("error", f"Error checking bells: {e}")
                 continue
     
     def load_schedule(self):
@@ -655,8 +735,11 @@ class SchoolBell(QMainWindow):
         if path:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            self.sound_player.play(path, "start")
+            volumes = self.config.get_volumes()
+            start_volume = volumes.get("start", 100)
+            self.sound_player.play(path, "start", volume=start_volume)
             self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
+            self.logger.log_event("bell", f"Manual start bell: {Path(path).name}")
         else:
             QMessageBox.warning(self, "Ошибка", "Мелодия звонка не выбрана. Выберите в Настройки → Мелодии звонков → На урок")
 
@@ -668,6 +751,7 @@ class SchoolBell(QMainWindow):
             self.sound_player.stop_all()
             self.music_player.play_random(folder)
             self.status_label.setText(f"🎵 {LOCALIZATION[self.current_locale]['btn_music'].replace('🎵', '').strip()}!")
+            self.logger.log_event("music", "Manual music playback")
         else:
             QMessageBox.warning(self, "Ошибка", "Папка с музыкой не выбрана. Выберите в Настройки → Музыка на переменах")
     
@@ -677,8 +761,11 @@ class SchoolBell(QMainWindow):
         if path:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            self.sound_player.play(path, "anthem")
+            volumes = self.config.get_volumes()
+            anthem_volume = volumes.get("anthem", 100)
+            self.sound_player.play(path, "anthem", volume=anthem_volume)
             self.status_label.setText(f"🎼 {LOCALIZATION[self.current_locale]['btn_anthem'].replace('🎼', '').strip()}!")
+            self.logger.log_event("anthem", f"Manual anthem: {Path(path).name}")
         else:
             QMessageBox.warning(self, "Ошибка", "Файл гимна не выбран. Выберите в Настройки → Гимн")
 
@@ -709,10 +796,17 @@ class SchoolBell(QMainWindow):
                 cache_key = f"anthem_{time_str}"
                 if cache_key not in self.scheduled_music:
                     self.scheduled_music[cache_key] = True
+                    
+                    # Получаем громкость для гимна
+                    volumes = self.config.get_volumes()
+                    anthem_volume = volumes.get("anthem", 100)
+                    
                     self.sound_player.stop_all()
-                    self.sound_player.play(file_path, "anthem")
+                    self.sound_player.play(file_path, "anthem", volume=anthem_volume)
                     self.status_label.setText("🎼 Гимн!")
-        except:
+                    self.logger.log_event("anthem", f"Anthem played: {Path(file_path).name}")
+        except Exception as e:
+            self.logger.log_event("error", f"Error checking anthem: {e}")
             pass
 
     def _get_anthem_button_text(self):
@@ -727,29 +821,83 @@ class SchoolBell(QMainWindow):
     def manual_stop(self):
         """Остановка воспроизведения звонка, музыки и гимна"""
         self.sound_player.stop_all()
+        self.current_playing_track = None
         self.status_label.setText(f"🛑 {LOCALIZATION[self.current_locale]['btn_stop'].replace('🛑', '').strip()}!")
+        self.logger.log_event("stop", "Playback stopped by user")
+    
+    def setup_tray_icon(self):
+        """Настройка иконки в системном трее"""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        
+        # Создаем иконку (используем стандартную)
+        self.tray_icon = QSystemTrayIcon(self)
+        
+        # Пытаемся использовать иконку из темы или создаем простую
+        tray_icon = QIcon.fromTheme("audio-card", QIcon())
+        if tray_icon.isNull():
+            # Создаем простую иконку программно
+            from PySide6.QtGui import QPixmap, QPainter
+            pixmap = QPixmap(32, 32)
+            pixmap.fill(Qt.blue)
+            painter = QPainter(pixmap)
+            painter.setPen(Qt.white)
+            painter.drawText(pixmap.rect(), Qt.AlignCenter, "🔔")
+            painter.end()
+            tray_icon = QIcon(pixmap)
+        
+        self.tray_icon.setIcon(tray_icon)
+        self.tray_icon.setToolTip(LOCALIZATION[self.current_locale]["app_title"])
+        
+        # Создаем меню трея
+        tray_menu = QMenu()
+        
+        show_act = QAction(LOCALIZATION[self.current_locale].get("tray_show", "Показать"), self)
+        show_act.triggered.connect(self.show_window)
+        tray_menu.addAction(show_act)
+        
+        today_act = QAction(LOCALIZATION[self.current_locale].get("tray_today", "Сегодня"), self)
+        today_act.triggered.connect(self.set_today_schedule)
+        tray_menu.addAction(today_act)
+        
+        tray_menu.addSeparator()
+        
+        exit_act = QAction(LOCALIZATION[self.current_locale].get("tray_exit", "Выход"), self)
+        exit_act.triggered.connect(self.quit_application)
+        tray_menu.addAction(exit_act)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self.on_tray_activated)
+        self.tray_icon.show()
+    
+    def on_tray_activated(self, reason):
+        """Обработчик активации иконки в трее"""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show_window()
+    
+    def show_window(self):
+        """Показать окно программы"""
+        self.showNormal()
+        self.activateWindow()
+        self.raise_()
+    
+    def quit_application(self):
+        """Корректный выход из приложения"""
+        self.logger.log_event("info", "Application closed by user")
+        self.config.save_preferences(self.config.preferences)
+        QApplication.quit()
     
     def closeEvent(self, event):
-        """Остановка всего воспроизведения при закрытии программы"""
-        self.sound_player.stop_all()
-        
-        msg_box = QMessageBox(
-            QMessageBox.Question,
-            LOCALIZATION[self.current_locale]["confirm_exit_title"],
-            LOCALIZATION[self.current_locale]["confirm_exit_text"],
-            QMessageBox.Yes | QMessageBox.No,
-            self
+        """Обработчик закрытия окна - сворачиваем в трей вместо выхода"""
+        event.ignore()
+        self.hide()
+        self.tray_icon.showMessage(
+            LOCALIZATION[self.current_locale]["app_title"],
+            LOCALIZATION[self.current_locale].get("minimized_to_tray", "Приложение свернуто в трей"),
+            QSystemTrayIcon.Information,
+            2000
         )
-        msg_box.button(QMessageBox.Yes).setText(LOCALIZATION[self.current_locale]["btn_yes"])
-        msg_box.button(QMessageBox.No).setText(LOCALIZATION[self.current_locale]["btn_no"])
-        msg_box.setDefaultButton(QMessageBox.No)
-        
-        reply = msg_box.exec()
-        if reply == QMessageBox.Yes:
-            self.config.save_preferences(self.config.preferences)
-            event.accept()
-        else:
-            event.ignore()
+        self.logger.log_event("info", "Window minimized to tray")
 
 
 def main():

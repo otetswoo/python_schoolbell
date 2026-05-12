@@ -53,7 +53,7 @@ class MusicPlayer:
     
     def can_play(self):
         now = time.time()
-        return now - self.last_play_time > 60
+        return now - self.last_play_time > self.delay_minutes * 60
     
     def mark_played(self):
         self.last_play_time = time.time()

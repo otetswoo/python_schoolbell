@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QDate, QTime
 
 from src.config_manager import ConfigManager
+from src.volume_control import VolumeControl
 
 
 class AnnouncementSettingsDialog(QDialog):
@@ -59,6 +60,13 @@ class AnnouncementSettingsDialog(QDialog):
         time_layout.addWidget(self.time_edit)
         time_layout.addStretch()
         layout.addLayout(time_layout)
+
+        self.volume_control = VolumeControl(
+            "Громкость объявления:",
+            self.config.get_volume("announcement"),
+            self,
+        )
+        layout.addWidget(self.volume_control)
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -124,4 +132,5 @@ class AnnouncementSettingsDialog(QDialog):
         self.config.preferences["announcement"]["enabled"] = self.enabled_checkbox.isChecked()
         self.config.set_announcement_date(self.date_edit.date().toString("yyyy-MM-dd"))
         self.config.set_announcement_time(self.time_edit.time().toString("HH:mm"))
+        self.config.set_volume("announcement", self.volume_control.value())
         super().accept()

@@ -59,11 +59,7 @@ DEFAULT_SCHEDULE = {
     "holidays": [],
     "profiles": {
         "default": {
-            "name": "Стандартное",
-            "schedules": {
-                "usual": DEFAULT_SCHEDULE["schedules"]["usual"],
-                "short": DEFAULT_SCHEDULE["schedules"]["short"]
-            }
+            "name": "Стандартное"
         }
     },
     "current_profile": "default",

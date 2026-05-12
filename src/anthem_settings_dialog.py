@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, 
-                                QLabel, QFileDialog, QComboBox, QTimeEdit, QCheckBox)
-from PySide6.QtCore import Qt, QTime
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
+    QComboBox, QTimeEdit
+)
+from PySide6.QtCore import QTime
 from src.config_manager import ConfigManager
 from src.config import WEEK_DAYS_RU, WEEK_DAYS
+from src.volume_control import VolumeControl
 
 
 class AnthemSettingsDialog(QDialog):
@@ -59,6 +62,9 @@ class AnthemSettingsDialog(QDialog):
         time_layout.addWidget(self.time_edit)
         time_layout.addStretch()
         layout.addLayout(time_layout)
+
+        self.volume_control = VolumeControl("Громкость гимна:", self.config.get_volume("anthem"), self)
+        layout.addWidget(self.volume_control)
         
         # Кнопки
         btn_layout = QHBoxLayout()
@@ -113,5 +119,6 @@ class AnthemSettingsDialog(QDialog):
         
         time_str = self.time_edit.time().toString("HH:mm")
         self.config.set_anthem_time(time_str)
+        self.config.set_volume("anthem", self.volume_control.value())
         
         super().accept()

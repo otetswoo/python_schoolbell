@@ -112,5 +112,3 @@ sounds:
 MIT
 
 ---
-
-**Репозиторий:** [github.com/YOUR_USERNAME/school_bell](https://github.com/YOUR_USERNAME/school_bell)

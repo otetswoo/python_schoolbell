@@ -437,11 +437,7 @@ class SchoolBell(QMainWindow):
         self.today_btn.setText(self.tr('btn_today'))
 
         # Сбрасываем кэш при смене дня
-        if hasattr(self, 'last_day') and self.last_day != WEEK_DAYS[idx]:
-            self.logger.log_event("info", f"New day: {day_ru}")
-            self.played_events.clear()
-            self.music_player.reset_daily()
-            self.current_playing_track = None
+        self._reset_daily_state(WEEK_DAYS[idx])
 
         self.select_day(day_ru)
 
@@ -627,29 +623,58 @@ class SchoolBell(QMainWindow):
         variant = self._get_variant_for_day_key(day_key)
         return self.schedule_variants.get(day_key, {}).get(variant, [])
 
+    def _resolve_existing_file(self, path):
+        """Возвращает абсолютный Path для существующего файла или None."""
+        if not path:
+            return None
+
+        resolved_path = Path(path)
+        if not resolved_path.is_absolute():
+            resolved_path = SCHEDULE_PATH.parent / resolved_path
+        return resolved_path if resolved_path.exists() else None
+
     def _get_sound_path(self, sound_type):
         """Возвращает существующий путь к звуку с fallback на настройки по умолчанию."""
         candidates = [self.sounds.get(sound_type), DEFAULT_SCHEDULE["sounds"].get(sound_type)]
         for candidate in candidates:
-            if not candidate:
-                continue
-            path = Path(candidate)
-            if not path.is_absolute():
-                path = SCHEDULE_PATH.parent / path
-            if path.exists():
+            path = self._resolve_existing_file(candidate)
+            if path:
                 return str(path)
         return ""
+
+    def _reset_daily_state(self, day_key):
+        """Сбрасывает кэш событий и состояние музыки при смене календарного дня."""
+        if self.last_day == day_key:
+            return
+
+        self.logger.log_event("info", f"New day: {WEEK_DAYS_RU[WEEK_DAYS.index(day_key)]}")
+        self.played_events.clear()
+        self.music_player.reset_daily()
+        self.current_playing_track = None
+        self.last_day = day_key
+
+    def _play_cached_audio(self, event_type, event_time, path, volume, status_text=None, log_message=None):
+        """Проигрывает событие один раз в минутном окне и помечает его в кэше."""
+        cache_key = self._event_cache_key(event_type, event_time)
+        if cache_key in self.played_events:
+            return False
+
+        self.sound_player.stop_all()
+        if self.sound_player.play(str(path), event_type, volume=volume):
+            self._clear_main_window_message()
+            self.played_events[cache_key] = True
+            if status_text:
+                self.status_label.setText(status_text)
+            if log_message:
+                category = "bell" if event_type in {"start", "end"} else event_type
+                self.logger.log_event(category, log_message)
+            return True
+        return False
 
     def play_bell(self, bell_type, event_time):
         if not self.bells_enabled:
             return
 
-        cache_key = self._event_cache_key(bell_type, event_time)
-        if cache_key in self.played_events:
-            return
-
-        volumes = self.config.get_volumes()
-        volume = volumes.get(bell_type, 100)
         path = self._get_sound_path(bell_type)
         if not path:
             self._set_main_window_message(
@@ -657,9 +682,13 @@ class SchoolBell(QMainWindow):
                 "Мелодия звонка не выбрана. Выберите звук в настройках.",
             )
             return
-        if self.sound_player.play(path, bell_type, volume=volume):
-            self._clear_main_window_message()
-            self.played_events[cache_key] = True
+
+        self._play_cached_audio(
+            bell_type,
+            event_time,
+            path,
+            self.config.get_volume(bell_type),
+        )
 
     def play_break_music(self, event_time=None):
         """Воспроизведение музыки на перемене."""
@@ -713,12 +742,7 @@ class SchoolBell(QMainWindow):
         today_key = WEEK_DAYS[now.weekday()]
 
         # Проверяем смену дня и сбрасываем кэш автоматических событий
-        if hasattr(self, 'last_day') and self.last_day != today_key:
-            self.logger.log_event("info", f"New day: {WEEK_DAYS_RU[WEEK_DAYS.index(today_key)]}")
-            self.played_events.clear()
-            self.music_player.reset_daily()
-            self.current_playing_track = None
-        self.last_day = today_key
+        self._reset_daily_state(today_key)
 
         # Проверяем автоматический запуск гимна и разового объявления
         self.check_anthem(now)
@@ -751,37 +775,28 @@ class SchoolBell(QMainWindow):
                 end = self._lesson_datetime(lesson, "end", today_date)
 
                 if self.bells_enabled:
-                    if self._is_time_to_play(now, start):
-                        cache_key = self._event_cache_key("start", start)
-                        if cache_key not in self.played_events:
-                            path = self._get_sound_path("start")
-                            if path:
-                                self.sound_player.stop_all()
-                                if self.sound_player.play(path, "start", volume=self.config.get_volume("start")):
-                                    self._clear_main_window_message()
-                                    self.played_events[cache_key] = True
-                                    self.logger.log_event("bell", f"Start bell: lesson {lesson.get('num')}")
-                            else:
-                                self._set_main_window_message(
-                                    "missing_bell_sound",
-                                    "Мелодия звонка не выбрана. Выберите звук в настройках.",
-                                )
+                    bell_events = (
+                        ("start", start, f"Start bell: lesson {lesson.get('num')}"),
+                        ("end", end, f"End bell: lesson {lesson.get('num')}"),
+                    )
+                    for bell_type, bell_time, log_message in bell_events:
+                        if not self._is_time_to_play(now, bell_time):
+                            continue
 
-                    if self._is_time_to_play(now, end):
-                        cache_key = self._event_cache_key("end", end)
-                        if cache_key not in self.played_events:
-                            path = self._get_sound_path("end")
-                            if path:
-                                self.sound_player.stop_all()
-                                if self.sound_player.play(path, "end", volume=self.config.get_volume("end")):
-                                    self._clear_main_window_message()
-                                    self.played_events[cache_key] = True
-                                    self.logger.log_event("bell", f"End bell: lesson {lesson.get('num')}")
-                            else:
-                                self._set_main_window_message(
-                                    "missing_bell_sound",
-                                    "Мелодия звонка не выбрана. Выберите звук в настройках.",
-                                )
+                        path = self._get_sound_path(bell_type)
+                        if path:
+                            self._play_cached_audio(
+                                bell_type,
+                                bell_time,
+                                path,
+                                self.config.get_volume(bell_type),
+                                log_message=log_message,
+                            )
+                        else:
+                            self._set_main_window_message(
+                                "missing_bell_sound",
+                                "Мелодия звонка не выбрана. Выберите звук в настройках.",
+                            )
 
                 if self.music_enabled:
                     music_time = end + datetime.timedelta(minutes=music_delay)
@@ -941,11 +956,8 @@ class SchoolBell(QMainWindow):
         self.config.preferences["anthem"] = anthem_settings
         self.config.save_preferences(self.config.preferences)
         if self.anthem_enabled:
-            anthem_file = anthem_settings.get("file", "")
-            anthem_path = Path(anthem_file) if anthem_file else None
-            if anthem_path and not anthem_path.is_absolute():
-                anthem_path = SCHEDULE_PATH.parent / anthem_path
-            if not anthem_path or not anthem_path.exists():
+            anthem_path = self._resolve_existing_file(anthem_settings.get("file", ""))
+            if not anthem_path:
                 self._set_main_window_message(
                     "missing_anthem_file",
                     "Файл гимна не выбран или не найден. Выберите файл в настройках.",
@@ -961,11 +973,8 @@ class SchoolBell(QMainWindow):
         self.config.preferences["announcement"] = announcement_settings
         self.config.save_preferences(self.config.preferences)
         if self.announcement_enabled:
-            announcement_file = announcement_settings.get("file", "")
-            announcement_path = Path(announcement_file) if announcement_file else None
-            if announcement_path and not announcement_path.is_absolute():
-                announcement_path = SCHEDULE_PATH.parent / announcement_path
-            if not announcement_path or not announcement_path.exists():
+            announcement_path = self._resolve_existing_file(announcement_settings.get("file", ""))
+            if not announcement_path:
                 self._set_main_window_message(
                     "missing_announcement_file",
                     "Файл объявления не выбран или не найден. Выберите файл в настройках.",
@@ -1031,47 +1040,32 @@ class SchoolBell(QMainWindow):
 
     def manual_anthem(self):
         anthem_settings = self.config.get_anthem_settings()
-        path = anthem_settings.get("file", "")
-        if path:
-            anthem_path = Path(path)
-            if not anthem_path.is_absolute():
-                anthem_path = SCHEDULE_PATH.parent / anthem_path
-            if not anthem_path.exists():
-                self._set_main_window_message(
-                    "missing_anthem_file",
-                    "Файл гимна не выбран или не найден. Выберите файл в настройках.",
-                )
-                return
-            # Останавливаем предыдущее воспроизведение перед запуском нового
-            self.sound_player.stop_all()
-            volumes = self.config.get_volumes()
-            anthem_volume = volumes.get("anthem", 100)
-            if self.sound_player.play(str(anthem_path), "anthem", volume=anthem_volume):
-                self._clear_main_window_message()
-                self.status_label.setText(f"🎼 {self.tr('btn_anthem').replace('🎼', '').strip()}!")
-                self.logger.log_event("anthem", f"Manual anthem: {anthem_path.name}")
-        else:
+        anthem_path = self._resolve_existing_file(anthem_settings.get("file", ""))
+        if not anthem_path:
             self._set_main_window_message(
                 "missing_anthem_file",
                 "Файл гимна не выбран или не найден. Выберите файл в настройках.",
             )
+            return
+
+        self.sound_player.stop_all()
+        anthem_volume = self.config.get_volume("anthem")
+        if self.sound_player.play(str(anthem_path), "anthem", volume=anthem_volume):
+            self._clear_main_window_message()
+            self.status_label.setText(f"🎼 {self.tr('btn_anthem').replace('🎼', '').strip()}!")
+            self.logger.log_event("anthem", f"Manual anthem: {anthem_path.name}")
 
     def check_anthem(self, now):
-        """Проверяет, нужно ли автоматически запустить гимн"""
+        """Проверяет, нужно ли автоматически запустить гимн."""
         if not self.anthem_enabled:
             return
 
         anthem_settings = self.config.get_anthem_settings()
-        file_path = anthem_settings.get("file", "")
-        if file_path:
-            anthem_path = Path(file_path)
-            if not anthem_path.is_absolute():
-                anthem_path = SCHEDULE_PATH.parent / anthem_path
-            file_path = str(anthem_path)
+        anthem_path = self._resolve_existing_file(anthem_settings.get("file", ""))
         day = anthem_settings.get("day", "")
         time_str = anthem_settings.get("time", "")
 
-        if not file_path:
+        if not anthem_path:
             self._set_main_window_message(
                 "missing_anthem_file",
                 "Файл гимна не выбран или не найден. Выберите файл в настройках.",
@@ -1083,19 +1077,11 @@ class SchoolBell(QMainWindow):
                 "День или время гимна не заданы. Проверьте настройки гимна.",
             )
             return
-        if not Path(file_path).exists():
-            self._set_main_window_message(
-                "missing_anthem_file",
-                "Файл гимна не выбран или не найден. Выберите файл в настройках.",
-            )
-            return
 
-        # Проверяем день недели
         today_key = WEEK_DAYS[now.weekday()]
         if today_key != day:
             return
 
-        # Проверяем время (с точностью до секунды)
         try:
             anthem_clock = self._parse_time(time_str)
             anthem_time = now.replace(
@@ -1107,51 +1093,35 @@ class SchoolBell(QMainWindow):
 
             # Проверяем запуск в течение минуты, чтобы таймер GUI не пропускал событие.
             if self._is_time_to_play(now, anthem_time):
-                # Проверяем, не был ли уже сыгран гимн сегодня
-                cache_key = self._event_cache_key("anthem", anthem_time)
-                if cache_key not in self.played_events:
-                    # Получаем громкость для гимна
-                    volumes = self.config.get_volumes()
-                    anthem_volume = volumes.get("anthem", 100)
-
-                    self.sound_player.stop_all()
-                    if self.sound_player.play(file_path, "anthem", volume=anthem_volume):
-                        self._clear_main_window_message()
-                        self.played_events[cache_key] = True
-                        self.status_label.setText("🎼 Гимн!")
-                        self.logger.log_event("anthem", f"Anthem played: {Path(file_path).name}")
+                self._play_cached_audio(
+                    "anthem",
+                    anthem_time,
+                    anthem_path,
+                    self.config.get_volume("anthem"),
+                    status_text="🎼 Гимн!",
+                    log_message=f"Anthem played: {anthem_path.name}",
+                )
         except Exception as e:
             self.logger.log_event("error", f"Error checking anthem: {e}")
-            pass
-
 
     def manual_announcement(self):
         announcement_settings = self.config.get_announcement_settings()
-        path = announcement_settings.get("file", "")
-        if path:
-            announcement_path = Path(path)
-            if not announcement_path.is_absolute():
-                announcement_path = SCHEDULE_PATH.parent / announcement_path
-            if not announcement_path.exists():
-                self._set_main_window_message(
-                    "missing_announcement_file",
-                    "Файл объявления не выбран или не найден. Выберите файл в настройках.",
-                )
-                return
-
-            self.sound_player.stop_all()
-            announcement_volume = self.config.get_volume("announcement")
-            if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
-                self._clear_main_window_message()
-                self.status_label.setText(
-                    f"📢 {self.tr('btn_announcement').replace('📢', '').strip()}!"
-                )
-                self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
-        else:
+        announcement_path = self._resolve_existing_file(announcement_settings.get("file", ""))
+        if not announcement_path:
             self._set_main_window_message(
                 "missing_announcement_file",
                 "Файл объявления не выбран или не найден. Выберите файл в настройках.",
             )
+            return
+
+        self.sound_player.stop_all()
+        announcement_volume = self.config.get_volume("announcement")
+        if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
+            self._clear_main_window_message()
+            self.status_label.setText(
+                f"📢 {self.tr('btn_announcement').replace('📢', '').strip()}!"
+            )
+            self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
 
     def check_announcement(self, now):
         """Проверяет, нужно ли автоматически запустить разовое объявление."""
@@ -1162,16 +1132,11 @@ class SchoolBell(QMainWindow):
         if announcement_settings.get("played", False):
             return
 
-        file_path = announcement_settings.get("file", "")
-        if file_path:
-            announcement_path = Path(file_path)
-            if not announcement_path.is_absolute():
-                announcement_path = SCHEDULE_PATH.parent / announcement_path
-            file_path = str(announcement_path)
+        announcement_path = self._resolve_existing_file(announcement_settings.get("file", ""))
         date_str = announcement_settings.get("date", "")
         time_str = announcement_settings.get("time", "")
 
-        if not file_path:
+        if not announcement_path:
             self._set_main_window_message(
                 "missing_announcement_file",
                 "Файл объявления не выбран или не найден. Выберите файл в настройках.",
@@ -1181,12 +1146,6 @@ class SchoolBell(QMainWindow):
             self._set_main_window_message(
                 "missing_announcement_schedule",
                 "Дата или время объявления не заданы. Проверьте настройки объявления.",
-            )
-            return
-        if not Path(file_path).exists():
-            self._set_main_window_message(
-                "missing_announcement_file",
-                "Файл объявления не выбран или не найден. Выберите файл в настройках.",
             )
             return
 
@@ -1203,22 +1162,19 @@ class SchoolBell(QMainWindow):
                 microsecond=0,
             )
 
-            if self._is_time_to_play(now, announcement_time):
-                cache_key = self._event_cache_key("announcement", announcement_time)
-                if cache_key not in self.played_events:
-                    announcement_volume = self.config.get_volume("announcement")
-
-                    self.sound_player.stop_all()
-                    if self.sound_player.play(file_path, "announcement", volume=announcement_volume):
-                        self._clear_main_window_message()
-                        self.played_events[cache_key] = True
-                        self.config.set_announcement_played(True)
-                        self.config.save_preferences(self.config.preferences)
-                        self.announcement_enabled = False
-                        self.announcement_checkbox.setChecked(False)
-                        self.announcement_btn.setText(self._get_announcement_button_text())
-                        self.status_label.setText("📢 Объявление!")
-                        self.logger.log_event("announcement", f"Announcement played: {Path(file_path).name}")
+            if self._is_time_to_play(now, announcement_time) and self._play_cached_audio(
+                "announcement",
+                announcement_time,
+                announcement_path,
+                self.config.get_volume("announcement"),
+                status_text="📢 Объявление!",
+                log_message=f"Announcement played: {announcement_path.name}",
+            ):
+                self.config.set_announcement_played(True)
+                self.config.save_preferences(self.config.preferences)
+                self.announcement_enabled = False
+                self.announcement_checkbox.setChecked(False)
+                self.announcement_btn.setText(self._get_announcement_button_text())
         except Exception as e:
             self.logger.log_event("error", f"Error checking announcement: {e}")
 

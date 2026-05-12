@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from src.config import (
-    WEEK_DAYS, WEEK_DAYS_RU, WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN,
-    DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE
-)
-import yaml
+from copy import deepcopy
 from pathlib import Path
 import datetime
+
+import yaml
+
+from src.config import DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE
 
 
 class ConfigManager:
@@ -23,10 +23,10 @@ class ConfigManager:
                 return True
             except Exception as e:
                 print(f"Error loading schedule: {e}")
-                self.schedule_data = DEFAULT_SCHEDULE.copy()
+                self.schedule_data = deepcopy(DEFAULT_SCHEDULE)
                 return False
         else:
-            self.schedule_data = DEFAULT_SCHEDULE.copy()
+            self.schedule_data = deepcopy(DEFAULT_SCHEDULE)
             return True
 
     def save_schedule(self, data, path=None):

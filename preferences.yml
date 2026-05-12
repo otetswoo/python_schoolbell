@@ -1,4 +1,15 @@
-last_saved: '2026-05-08T21:19:33.614352'
+announcement:
+  date: ''
+  enabled: false
+  file: ''
+  played: false
+  time: 08:30
+anthem:
+  day: monday
+  enabled: true
+  file: /mnt/files/Музыка/Избранное ЯМ/Fight_Nights_-_Salvador_67208043.mp3
+  time: 08:30
+last_saved: '2026-05-12T20:20:29.315044'
 music:
   delay_minutes: 2
   enabled: true
@@ -15,3 +26,7 @@ variants:
   thursday: usual
   tuesday: usual
   wednesday: usual
+  Воскресенье: none
+  Суббота: none
+volumes:
+  anthem: 100

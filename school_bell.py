@@ -60,7 +60,9 @@ class SchoolBell(QMainWindow):
         self.last_day = None  # Для отслеживания смены дня
         
         self.scheduled_music = {}
-        self.bells_enabled = True
+        # Загружаем состояние звонков из настроек, по умолчанию True
+        bells_prefs = self.config.preferences.get("bells", {})
+        self.bells_enabled = bells_prefs.get("enabled", True)
         self.current_playing_track = None
         
         music_settings = self.config.get_music_settings()
@@ -120,7 +122,7 @@ class SchoolBell(QMainWindow):
         
         # Чекбоксы справа
         self.bells_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_bells"])
-        self.bells_checkbox.setChecked(True)
+        self.bells_checkbox.setChecked(self.bells_enabled)
         self.bells_checkbox.stateChanged.connect(self.on_bells_toggled)
         top_layout.addWidget(self.bells_checkbox)
         
@@ -713,6 +715,11 @@ class SchoolBell(QMainWindow):
     
     def on_bells_toggled(self, state):
         self.bells_enabled = (state == Qt.Checked)
+        # Сохраняем состояние в настройки
+        if "bells" not in self.config.preferences:
+            self.config.preferences["bells"] = {}
+        self.config.preferences["bells"]["enabled"] = self.bells_enabled
+        self.config.save_preferences(self.config.preferences)
     
     def on_music_toggled(self, state):
         self.music_enabled = (state == Qt.Checked)
@@ -770,6 +777,9 @@ class SchoolBell(QMainWindow):
 
     def check_anthem(self, now):
         """Проверяет, нужно ли автоматически запустить гимн"""
+        if not self.anthem_enabled:
+            return
+            
         anthem_settings = self.config.get_anthem_settings()
         file_path = anthem_settings.get("file", "")
         day = anthem_settings.get("day", "")

@@ -8,12 +8,13 @@ from src.config import MUSIC_DIR
 
 
 class MusicPlayer:
-    def __init__(self, sound_player=None):
+    def __init__(self, sound_player=None, logger=None):
         self.music_folder = None
         self.played_today = set()
         self.last_play_time = 0
         self.delay_minutes = 2
         self.sound_player = sound_player
+        self.logger = logger
         
     def set_music_folder(self, folder):
         if folder and Path(folder).exists():

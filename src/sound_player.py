@@ -10,8 +10,6 @@ from pathlib import Path
 
 class SoundPlayer:
     def __init__(self):
-        self.last_played = {"start": 0.0, "end": 0.0, "anthem": 0.0}
-        self.min_interval = 60
         self.current_process = None
     
     def play(self, sound_path, sound_type="auto"):

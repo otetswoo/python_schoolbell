@@ -449,12 +449,7 @@ class SchoolBell(QMainWindow):
                     item = self.table.item(r, c)
                     if item:
                         item.setBackground(bg)
-                
-                if 0 <= (now - start).total_seconds() < 2:
-                    self.play_bell("start", start)
-                if 0 <= (now - end).total_seconds() < 2:
-                    self.play_bell("end", end)
-                    
+                        
             except:
                 continue
     
@@ -495,6 +490,50 @@ class SchoolBell(QMainWindow):
         
         # Проверяем автоматический запуск гимна
         self.check_anthem(now)
+        
+        # Проверяем звонки
+        self.check_schedule_bells(now)
+    
+    def check_schedule_bells(self, now):
+        """Проверка звонков по расписанию"""
+        if not self.current_day or not self.bells_enabled:
+            return
+        
+        idx = WEEK_DAYS_RU.index(self.current_day)
+        key = WEEK_DAYS[idx]
+        lessons = self.schedule_variants.get(key, {}).get(self.current_variant, [])
+        
+        today = now.date()
+        for l in lessons:
+            try:
+                start = datetime.datetime.combine(today, datetime.time.fromisoformat(l["start"].replace(":", ":00")))
+                end = datetime.datetime.combine(today, datetime.time.fromisoformat(l["end"].replace(":", ":00")))
+                
+                # Проверяем начало урока (звонок на урок)
+                if 0 <= (now - start).total_seconds() < 0.5:
+                    cache_key = f"start_{start.strftime('%H%M')}"
+                    if cache_key not in self.scheduled_music:
+                        self.scheduled_music[cache_key] = True
+                        path = self.sounds.get("start")
+                        if path:
+                            self.sound_player.stop_all()
+                            self.sound_player.play(path, "start")
+                
+                # Проверяем окончание урока (звонок с урока)
+                if 0 <= (now - end).total_seconds() < 0.5:
+                    cache_key = f"end_{end.strftime('%H%M')}"
+                    if cache_key not in self.scheduled_music:
+                        self.scheduled_music[cache_key] = True
+                        path = self.sounds.get("end")
+                        if path:
+                            self.sound_player.stop_all()
+                            self.sound_player.play(path, "end")
+                            
+                            # Запускаем музыку на перемене
+                            if self.music_enabled:
+                                QTimer.singleShot(120000, lambda: self.play_break_music())
+            except:
+                continue
     
     def load_schedule(self):
         fname, _ = QFileDialog.getOpenFileName(self, "Загрузить расписание", "", "YAML (*.yml *.yaml)")
@@ -616,10 +655,8 @@ class SchoolBell(QMainWindow):
         if path:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.sound_player.play(path, "start"):
-                self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
-            else:
-                self.status_label.setText(f"⚠️ Звонок уже воспроизводится")
+            self.sound_player.play(path, "start")
+            self.status_label.setText(f"🔔 {LOCALIZATION[self.current_locale]['btn_bell'].replace('🔔', '').strip()}!")
         else:
             QMessageBox.warning(self, "Ошибка", "Мелодия звонка не выбрана. Выберите в Настройки → Мелодии звонков → На урок")
 
@@ -629,10 +666,8 @@ class SchoolBell(QMainWindow):
         if folder:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.music_player.play_random(folder):
-                self.status_label.setText(f"🎵 {LOCALIZATION[self.current_locale]['btn_music'].replace('🎵', '').strip()}!")
-            else:
-                self.status_label.setText(f"⚠️ Музыка уже воспроизводится")
+            self.music_player.play_random(folder)
+            self.status_label.setText(f"🎵 {LOCALIZATION[self.current_locale]['btn_music'].replace('🎵', '').strip()}!")
         else:
             QMessageBox.warning(self, "Ошибка", "Папка с музыкой не выбрана. Выберите в Настройки → Музыка на переменах")
     
@@ -642,18 +677,13 @@ class SchoolBell(QMainWindow):
         if path:
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
-            if self.sound_player.play(path, "anthem"):
-                self.status_label.setText(f"🎼 {LOCALIZATION[self.current_locale]['btn_anthem'].replace('🎼', '').strip()}!")
-            else:
-                self.status_label.setText(f"⚠️ Гимн уже воспроизводится")
+            self.sound_player.play(path, "anthem")
+            self.status_label.setText(f"🎼 {LOCALIZATION[self.current_locale]['btn_anthem'].replace('🎼', '').strip()}!")
         else:
             QMessageBox.warning(self, "Ошибка", "Файл гимна не выбран. Выберите в Настройки → Гимн")
 
     def check_anthem(self, now):
         """Проверяет, нужно ли автоматически запустить гимн"""
-        if not self.anthem_enabled:
-            return
-        
         anthem_settings = self.config.get_anthem_settings()
         file_path = anthem_settings.get("file", "")
         day = anthem_settings.get("day", "")

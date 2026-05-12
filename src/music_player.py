@@ -15,10 +15,6 @@ class MusicPlayer:
         self.delay_minutes = 2
         self.sound_player = sound_player
         
-    def set_sound_player(self, sound_player):
-        """Устанавливает общий экземпляр SoundPlayer для управления воспроизведением"""
-        self.sound_player = sound_player
-        
     def set_music_folder(self, folder):
         if folder and Path(folder).exists():
             self.music_folder = Path(folder)

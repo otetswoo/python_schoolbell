@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QLabel, QMenu, QFileDialog, QMessageBox,
     QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
-    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon
+    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon,
+    QSlider
 )
 from PySide6.QtGui import QAction, QColor, QFont, QPalette, QKeySequence, QIcon
 from PySide6.QtCore import Qt, QTimer, QEvent
@@ -72,6 +73,9 @@ class SchoolBell(QMainWindow):
 
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_enabled = anthem_settings.get("enabled", False)
+
+        announcement_settings = self.config.get_announcement_settings()
+        self.announcement_enabled = announcement_settings.get("enabled", False)
 
         # Настройки системного трея
         self.tray_icon = None
@@ -141,6 +145,12 @@ class SchoolBell(QMainWindow):
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
         top_layout.addWidget(self.anthem_checkbox)
 
+        self.announcement_checkbox = QCheckBox(LOCALIZATION[self.current_locale]["chk_announcement"])
+        announcement_settings = self.config.get_announcement_settings()
+        self.announcement_checkbox.setChecked(announcement_settings.get("enabled", False))
+        self.announcement_checkbox.stateChanged.connect(self.on_announcement_toggled)
+        top_layout.addWidget(self.announcement_checkbox)
+
         layout.addLayout(top_layout)
 
         # Таблица расписания (компактная)
@@ -153,6 +163,19 @@ class SchoolBell(QMainWindow):
         # Уменьшаем высоту строк для компактности
         self.table.verticalHeader().setDefaultSectionSize(28)
         layout.addWidget(self.table)
+
+        # Регулировка громкости звонков, музыки на переменах, гимна и объявлений
+        self.volume_group = QGroupBox(LOCALIZATION[self.current_locale]["volume_group"])
+        volume_layout = QHBoxLayout()
+        self.volume_group.setLayout(volume_layout)
+
+        self.volume_sliders = {}
+        self.volume_value_labels = {}
+        self._create_volume_slider(volume_layout, "bell", self.config.get_volume("start"))
+        self._create_volume_slider(volume_layout, "music", self.config.get_volume("music"))
+        self._create_volume_slider(volume_layout, "anthem", self.config.get_volume("anthem"))
+        self._create_volume_slider(volume_layout, "announcement", self.config.get_volume("announcement"))
+        layout.addWidget(self.volume_group)
 
         # Нижняя панель: кнопка редактирования и кнопки управления
         bottom_layout = QHBoxLayout()
@@ -181,6 +204,10 @@ class SchoolBell(QMainWindow):
         self.anthem_btn.clicked.connect(self.manual_anthem)
         bottom_layout.addWidget(self.anthem_btn)
 
+        self.announcement_btn = QPushButton(self._get_announcement_button_text())
+        self.announcement_btn.clicked.connect(self.manual_announcement)
+        bottom_layout.addWidget(self.announcement_btn)
+
         self.stop_btn = QPushButton(LOCALIZATION[self.current_locale]["btn_stop"])
         self.stop_btn.clicked.connect(self.manual_stop)
         bottom_layout.addWidget(self.stop_btn)
@@ -192,6 +219,56 @@ class SchoolBell(QMainWindow):
         layout.addWidget(self.status_label)
 
         self.setup_menu()
+
+    def _create_volume_slider(self, parent_layout, volume_type, value):
+        """Создает подписанный ползунок громкости для главного окна."""
+        container = QWidget()
+        container_layout = QHBoxLayout()
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container.setLayout(container_layout)
+
+        name_label = QLabel(LOCALIZATION[self.current_locale][f"volume_{volume_type}"])
+        name_label.setMinimumWidth(70)
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(0, 100)
+        slider.setSingleStep(5)
+        slider.setPageStep(10)
+        slider.setValue(value)
+        slider.setToolTip(LOCALIZATION[self.current_locale][f"volume_{volume_type}"])
+
+        value_label = QLabel()
+        value_label.setMinimumWidth(42)
+        value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._set_volume_label(value_label, value)
+
+        slider.valueChanged.connect(
+            lambda new_value, vt=volume_type, label=value_label: self.on_volume_changed(vt, new_value, label)
+        )
+
+        container_layout.addWidget(name_label)
+        container_layout.addWidget(slider, 1)
+        container_layout.addWidget(value_label)
+        parent_layout.addWidget(container)
+
+        self.volume_sliders[volume_type] = slider
+        self.volume_value_labels[volume_type] = value_label
+
+    def _set_volume_label(self, label, value):
+        label.setText(f"{value}%")
+
+    def on_volume_changed(self, volume_type, value, value_label):
+        """Сохраняет изменения громкости из ползунков главного окна."""
+        self._set_volume_label(value_label, value)
+        if volume_type == "bell":
+            self.config.set_volume("start", value)
+            self.config.set_volume("end", value)
+            if self.sound_player.current_type in ("start", "end"):
+                self.sound_player.set_volume(value)
+        else:
+            self.config.set_volume(volume_type, value)
+            if self.sound_player.current_type == volume_type:
+                self.sound_player.set_volume(value)
+        self.config.save_preferences(self.config.preferences)
 
     def setup_menu(self):
         menubar = self.menuBar()
@@ -234,6 +311,10 @@ class SchoolBell(QMainWindow):
         anthem_act = QAction(LOCALIZATION[self.current_locale]["action_anthem"], self)
         anthem_act.triggered.connect(self.show_anthem_settings)
         settings_menu.addAction(anthem_act)
+
+        announcement_act = QAction(LOCALIZATION[self.current_locale]["action_announcement"], self)
+        announcement_act.triggered.connect(self.show_announcement_settings)
+        settings_menu.addAction(announcement_act)
 
         # Добавляем пункт "Редактировать шаблоны"
         templates_act = QAction("📚 Редактировать шаблоны", self)
@@ -623,6 +704,11 @@ class SchoolBell(QMainWindow):
             )
             return
 
+        if self.sound_player.is_playing("announcement"):
+            if event_time:
+                self.played_events[cache_key] = True
+            return
+
         volumes = self.config.get_volumes()
         music_volume = volumes.get("music", 50)
 
@@ -658,8 +744,9 @@ class SchoolBell(QMainWindow):
             self.current_playing_track = None
         self.last_day = today_key
 
-        # Проверяем автоматический запуск гимна
+        # Проверяем автоматический запуск гимна и разового объявления
         self.check_anthem(now)
+        self.check_announcement(now)
 
         # Проверяем звонки и музыку по расписанию текущего календарного дня
         self.check_schedule_bells(now)
@@ -791,7 +878,16 @@ class SchoolBell(QMainWindow):
         from src.anthem_settings_dialog import AnthemSettingsDialog
         dlg = AnthemSettingsDialog(self, self.config)
         if dlg.exec() == QDialog.Accepted:
-            anthem = self.config.get_anthem_settings()
+            self.config.save_preferences(self.config.preferences)
+
+    def show_announcement_settings(self):
+        """Открыть диалог настройки разового объявления"""
+        from src.announcement_settings_dialog import AnnouncementSettingsDialog
+        dlg = AnnouncementSettingsDialog(self, self.config)
+        if dlg.exec() == QDialog.Accepted:
+            announcement = self.config.get_announcement_settings()
+            self.announcement_enabled = announcement.get("enabled", False)
+            self.announcement_checkbox.setChecked(self.announcement_enabled)
             self.config.save_preferences(self.config.preferences)
 
     def set_locale(self, locale):
@@ -811,11 +907,18 @@ class SchoolBell(QMainWindow):
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
         self.anthem_checkbox.setText(texts["chk_anthem"])
+        self.announcement_checkbox.setText(texts["chk_announcement"])
+        self.volume_group.setTitle(texts["volume_group"])
+        for volume_type, slider in self.volume_sliders.items():
+            slider.setToolTip(texts[f"volume_{volume_type}"])
+            name_label = slider.parent().layout().itemAt(0).widget()
+            name_label.setText(texts[f"volume_{volume_type}"])
         # Обновляем текст кнопки Сегодня (только надпись, без даты)
         self.today_btn.setText(texts["btn_today"])
         self.bell_btn.setText("▶️ " + texts["btn_bell"].replace("🔔", "").strip())
         self.music_btn.setText("▶️ " + texts["btn_music"].replace("🎵", "").strip())
         self.anthem_btn.setText(self._get_anthem_button_text())
+        self.announcement_btn.setText(self._get_announcement_button_text())
         self.stop_btn.setText(texts["btn_stop"])
 
         headers = ["Начало", "Конец", "Урок"] if locale == "ru" else ["Start", "End", "Lesson"]
@@ -875,6 +978,26 @@ class SchoolBell(QMainWindow):
                 )
         self.anthem_btn.setText(self._get_anthem_button_text())
 
+    def on_announcement_toggled(self, state):
+        self.announcement_enabled = (state != 0)
+        announcement_settings = self.config.get_announcement_settings()
+        announcement_settings["enabled"] = self.announcement_enabled
+        if self.announcement_enabled:
+            announcement_settings["played"] = False
+        self.config.preferences["announcement"] = announcement_settings
+        self.config.save_preferences(self.config.preferences)
+        if self.announcement_enabled:
+            announcement_file = announcement_settings.get("file", "")
+            announcement_path = Path(announcement_file) if announcement_file else None
+            if announcement_path and not announcement_path.is_absolute():
+                announcement_path = SCHEDULE_PATH.parent / announcement_path
+            if not announcement_path or not announcement_path.exists():
+                self._set_main_window_message(
+                    "missing_announcement_file",
+                    "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+                )
+        self.announcement_btn.setText(self._get_announcement_button_text())
+
     def manual_bell(self):
         path = self._get_sound_path("start")
         if path:
@@ -893,6 +1016,13 @@ class SchoolBell(QMainWindow):
             )
 
     def manual_music(self):
+        if self.sound_player.is_playing("announcement"):
+            self._set_main_window_message(
+                "announcement_playing",
+                "Сейчас воспроизводится объявление. Музыка не будет запущена.",
+            )
+            return
+
         music_settings = self.config.get_music_settings()
         folder = music_settings.get("folder", "")
         if folder:
@@ -1020,6 +1150,113 @@ class SchoolBell(QMainWindow):
             self.logger.log_event("error", f"Error checking anthem: {e}")
             pass
 
+
+    def manual_announcement(self):
+        announcement_settings = self.config.get_announcement_settings()
+        path = announcement_settings.get("file", "")
+        if path:
+            announcement_path = Path(path)
+            if not announcement_path.is_absolute():
+                announcement_path = SCHEDULE_PATH.parent / announcement_path
+            if not announcement_path.exists():
+                self._set_main_window_message(
+                    "missing_announcement_file",
+                    "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+                )
+                return
+
+            self.sound_player.stop_all()
+            announcement_volume = self.config.get_volume("announcement")
+            if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
+                self._clear_main_window_message()
+                self.status_label.setText(
+                    f"📢 {LOCALIZATION[self.current_locale]['btn_announcement'].replace('📢', '').strip()}!"
+                )
+                self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
+        else:
+            self._set_main_window_message(
+                "missing_announcement_file",
+                "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+            )
+
+    def check_announcement(self, now):
+        """Проверяет, нужно ли автоматически запустить разовое объявление."""
+        if not self.announcement_enabled:
+            return
+
+        announcement_settings = self.config.get_announcement_settings()
+        if announcement_settings.get("played", False):
+            return
+
+        file_path = announcement_settings.get("file", "")
+        if file_path:
+            announcement_path = Path(file_path)
+            if not announcement_path.is_absolute():
+                announcement_path = SCHEDULE_PATH.parent / announcement_path
+            file_path = str(announcement_path)
+        date_str = announcement_settings.get("date", "")
+        time_str = announcement_settings.get("time", "")
+
+        if not file_path:
+            self._set_main_window_message(
+                "missing_announcement_file",
+                "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+            )
+            return
+        if not date_str or not time_str:
+            self._set_main_window_message(
+                "missing_announcement_schedule",
+                "Дата или время объявления не заданы. Проверьте настройки объявления.",
+            )
+            return
+        if not Path(file_path).exists():
+            self._set_main_window_message(
+                "missing_announcement_file",
+                "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+            )
+            return
+
+        try:
+            announcement_date = datetime.date.fromisoformat(date_str)
+            if now.date() != announcement_date:
+                return
+
+            announcement_clock = self._parse_time(time_str)
+            announcement_time = now.replace(
+                hour=announcement_clock.hour,
+                minute=announcement_clock.minute,
+                second=announcement_clock.second,
+                microsecond=0,
+            )
+
+            if self._is_time_to_play(now, announcement_time):
+                cache_key = self._event_cache_key("announcement", announcement_time)
+                if cache_key not in self.played_events:
+                    announcement_volume = self.config.get_volume("announcement")
+
+                    self.sound_player.stop_all()
+                    if self.sound_player.play(file_path, "announcement", volume=announcement_volume):
+                        self._clear_main_window_message()
+                        self.played_events[cache_key] = True
+                        self.config.set_announcement_played(True)
+                        self.config.save_preferences(self.config.preferences)
+                        self.announcement_enabled = False
+                        self.announcement_checkbox.setChecked(False)
+                        self.announcement_btn.setText(self._get_announcement_button_text())
+                        self.status_label.setText("📢 Объявление!")
+                        self.logger.log_event("announcement", f"Announcement played: {Path(file_path).name}")
+        except Exception as e:
+            self.logger.log_event("error", f"Error checking announcement: {e}")
+
+    def _get_announcement_button_text(self):
+        """Возвращает текст кнопки объявления в зависимости от состояния."""
+        texts = LOCALIZATION[self.current_locale]
+        btn_text = texts["btn_announcement"].replace("📢", "").strip()
+        if self.announcement_enabled:
+            return "▶️ " + btn_text
+        else:
+            return "⏸️ " + btn_text
+
     def _get_anthem_button_text(self):
         """Возвращает текст кнопки гимна в зависимости от состояния"""
         texts = LOCALIZATION[self.current_locale]
@@ -1030,7 +1267,7 @@ class SchoolBell(QMainWindow):
             return "⏸️ " + btn_text
 
     def manual_stop(self):
-        """Остановка воспроизведения звонка, музыки и гимна"""
+        """Остановка воспроизведения звонка, музыки, гимна и объявления"""
         self.sound_player.stop_all()
         self.current_playing_track = None
         self.status_label.setText(f"🛑 {LOCALIZATION[self.current_locale]['btn_stop'].replace('🛑', '').strip()}!")

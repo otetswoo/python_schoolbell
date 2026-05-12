@@ -55,6 +55,23 @@ DEFAULT_SCHEDULE = {
         "enabled": False,
         "folder": str(MUSIC_DIR),
         "delay_minutes": 2
+    },
+    "holidays": [],
+    "profiles": {
+        "default": {
+            "name": "Стандартное",
+            "schedules": {
+                "usual": DEFAULT_SCHEDULE["schedules"]["usual"],
+                "short": DEFAULT_SCHEDULE["schedules"]["short"]
+            }
+        }
+    },
+    "current_profile": "default",
+    "volumes": {
+        "start": 100,
+        "end": 100,
+        "anthem": 100,
+        "music": 50
     }
 }
 

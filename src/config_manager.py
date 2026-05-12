@@ -123,3 +123,87 @@ class ConfigManager:
     
     def set_theme(self, theme):
         self.preferences["theme"] = theme
+    
+    # Методы для работы с праздничными днями
+    def get_holidays(self):
+        """Возвращает список праздничных дат (строки формата YYYY-MM-DD)"""
+        if self.schedule_data and "holidays" in self.schedule_data:
+            return self.schedule_data.get("holidays", [])
+        return DEFAULT_SCHEDULE.get("holidays", [])
+    
+    def set_holidays(self, holidays_list):
+        """Устанавливает список праздничных дат"""
+        if self.schedule_data is None:
+            self.schedule_data = {}
+        self.schedule_data["holidays"] = holidays_list
+    
+    def is_holiday(self, date_obj):
+        """Проверяет, является ли дата праздничным днём"""
+        holidays = self.get_holidays()
+        date_str = date_obj.strftime("%Y-%m-%d")
+        return date_str in holidays
+    
+    # Методы для работы с профилями расписания
+    def get_profiles(self):
+        """Возвращает словарь профилей расписания"""
+        if self.schedule_data and "profiles" in self.schedule_data:
+            return self.schedule_data.get("profiles", {})
+        return DEFAULT_SCHEDULE.get("profiles", {})
+    
+    def get_current_profile(self):
+        """Возвращает имя текущего профиля"""
+        if self.schedule_data:
+            return self.schedule_data.get("current_profile", "default")
+        return "default"
+    
+    def set_current_profile(self, profile_name):
+        """Устанавливает текущий профиль"""
+        if self.schedule_data is None:
+            self.schedule_data = {}
+        self.schedule_data["current_profile"] = profile_name
+    
+    def add_profile(self, profile_name, name_display, schedules):
+        """Добавляет новый профиль расписания"""
+        if self.schedule_data is None:
+            self.schedule_data = {}
+        if "profiles" not in self.schedule_data:
+            self.schedule_data["profiles"] = {}
+        self.schedule_data["profiles"][profile_name] = {
+            "name": name_display,
+            "schedules": schedules
+        }
+    
+    def delete_profile(self, profile_name):
+        """Удаляет профиль (кроме default)"""
+        if profile_name == "default":
+            return False
+        if self.schedule_data and "profiles" in self.schedule_data:
+            if profile_name in self.schedule_data["profiles"]:
+                del self.schedule_data["profiles"][profile_name]
+                return True
+        return False
+    
+    def get_profile_schedules(self, profile_name):
+        """Возвращает расписание для указанного профиля"""
+        profiles = self.get_profiles()
+        if profile_name in profiles:
+            return profiles[profile_name].get("schedules", {})
+        return {}
+    
+    # Методы для работы с громкостью
+    def get_volumes(self):
+        """Возвращает настройки громкости для разных типов звуков"""
+        if self.preferences and "volumes" in self.preferences:
+            return self.preferences.get("volumes", DEFAULT_SCHEDULE.get("volumes", {}))
+        return DEFAULT_SCHEDULE.get("volumes", {})
+    
+    def set_volume(self, sound_type, volume):
+        """Устанавливает громкость для указанного типа звука (0-100)"""
+        if "volumes" not in self.preferences:
+            self.preferences["volumes"] = {}
+        self.preferences["volumes"][sound_type] = max(0, min(100, volume))
+    
+    def get_volume(self, sound_type):
+        """Возвращает громкость для указанного типа звука"""
+        volumes = self.get_volumes()
+        return volumes.get(sound_type, 50)

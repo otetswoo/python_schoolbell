@@ -1,7 +1,30 @@
 ```
-# Icons and build artifacts
-build_scripts/icon.ico
+# Compiled Python files
+*.pyc
+__pycache__/
 
-# Build scripts (if they generate artifacts)
-build_scripts/
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
 ```

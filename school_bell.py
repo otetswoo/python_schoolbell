@@ -69,6 +69,9 @@ class SchoolBell(QMainWindow):
         self.bells_enabled = bells_prefs.get("enabled", True)
         self.current_playing_track = None
         self.main_window_message = None
+        
+        # Блокировка для предотвращения гонок условий при воспроизведении
+        self._playback_lock = False
 
         music_settings = self.config.get_music_settings()
         self.music_enabled = music_settings.get("enabled", False)
@@ -107,14 +110,32 @@ class SchoolBell(QMainWindow):
         return self._texts().get(key, fallback if fallback is not None else key)
 
     def init_ui(self):
-        # Загружаем UI из файла .ui
-        ui_file = QFile(os.path.join(os.path.dirname(__file__), "src", "school_bell.ui"))
+        # Загружаем UI из файла .ui с обработкой ошибок
+        ui_path = os.path.join(os.path.dirname(__file__), "src", "school_bell.ui")
+        ui_file = QFile(ui_path)
         if not ui_file.open(QFile.ReadOnly):
-            raise FileNotFoundError(f"Не удалось открыть файл school_bell.ui: {ui_file.errorString()}")
+            error_msg = f"Не удалось открыть файл school_bell.ui: {ui_file.errorString()}"
+            self.logger.log_event("error", error_msg)
+            QMessageBox.critical(
+                None,
+                "Критическая ошибка",
+                f"{error_msg}\n\nПриложение не может быть запущено без файла интерфейса."
+            )
+            raise FileNotFoundError(error_msg)
         
         loader = QUiLoader()
         self.ui = loader.load(ui_file, self)
         ui_file.close()
+        
+        if not self.ui:
+            error_msg = "Ошибка загрузки UI: loader.load() вернул None"
+            self.logger.log_event("error", error_msg)
+            QMessageBox.critical(
+                None,
+                "Критическая ошибка",
+                f"{error_msg}\n\nПроверьте целостность файла school_bell.ui"
+            )
+            raise RuntimeError(error_msg)
         
         # Устанавливаем заголовок окна
         self.setWindowTitle(self.tr("app_title"))
@@ -609,22 +630,47 @@ class SchoolBell(QMainWindow):
         self.last_day = day_key
 
     def _play_cached_audio(self, event_type, event_time, path, volume, status_text=None, log_message=None):
-        """Проигрывает событие один раз в минутном окне и помечает его в кэше."""
+        """Проигрывает событие один раз в минутном окне и помечает его в кэше.
+        
+        Использует блокировку для предотвращения гонок условий при одновременных вызовах.
+        Приоритет событий: anthem > announcement > start/end > music
+        """
         cache_key = self._event_cache_key(event_type, event_time)
         if cache_key in self.played_events:
             return False
-
-        self.sound_player.stop_all()
-        if self.sound_player.play(str(path), event_type, volume=volume):
-            self._clear_main_window_message()
-            self.played_events[cache_key] = True
-            if status_text:
-                self.statusLabel.setText(status_text)
-            if log_message:
-                category = "bell" if event_type in {"start", "end"} else event_type
-                self.logger.log_event(category, log_message)
-            return True
-        return False
+        
+        # Проверка блокировки для предотвращения гонок
+        if self._playback_lock:
+            # Если уже идет воспроизведение, проверяем приоритет
+            current_type = self.sound_player.current_type
+            # Более важные события могут прервать менее важные
+            priority_order = {"anthem": 0, "announcement": 1, "start": 2, "end": 2, "music": 3}
+            new_priority = priority_order.get(event_type, 99)
+            current_priority = priority_order.get(current_type, 99)
+            
+            if new_priority >= current_priority:
+                # Менее важное или равное событие не прерывает текущее
+                self.played_events[cache_key] = True  # Помечаем как сыгранное
+                return False
+        
+        # Устанавливаем блокировку
+        self._playback_lock = True
+        try:
+            self.sound_player.stop_all()
+            if self.sound_player.play(str(path), event_type, volume=volume):
+                self._clear_main_window_message()
+                self.played_events[cache_key] = True
+                if status_text:
+                    self.statusLabel.setText(status_text)
+                if log_message:
+                    category = "bell" if event_type in {"start", "end"} else event_type
+                    self.logger.log_event(category, log_message)
+                return True
+            return False
+        finally:
+            # Снимаем блокировку после небольшой задержки
+            # Это позволяет избежать мгновенного повторного захвата
+            QTimer.singleShot(100, lambda: setattr(self, '_playback_lock', False))
 
     def play_bell(self, bell_type, event_time):
         if not self.bells_enabled:
@@ -1219,8 +1265,7 @@ class SchoolBell(QMainWindow):
     def closeEvent(self, event):
         """При закрытии спрашиваем: оставить программу в трее или выйти."""
         if self.force_quit:
-            self.sound_player.stop_all()
-            self.config.save_preferences(self.config.preferences)
+            self._cleanup_resources()
             event.accept()
             return
 
@@ -1253,8 +1298,7 @@ class SchoolBell(QMainWindow):
                 self.logger.log_event("info", "Window minimized to tray")
             elif clicked_button == exit_button:
                 self.force_quit = True
-                self.sound_player.stop_all()
-                self.config.save_preferences(self.config.preferences)
+                self._cleanup_resources()
                 self.logger.log_event("info", "Application closed from close dialog")
                 event.accept()
             else:
@@ -1265,11 +1309,29 @@ class SchoolBell(QMainWindow):
         text = self.tr("confirm_exit_text", "Вы уверены, что хотите выйти из программы?")
         if QMessageBox.question(self, title, text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
             self.force_quit = True
-            self.sound_player.stop_all()
-            self.config.save_preferences(self.config.preferences)
+            self._cleanup_resources()
             event.accept()
         else:
             event.ignore()
+
+    def _cleanup_resources(self):
+        """Корректно освобождает ресурсы Qt-объектов при закрытии приложения."""
+        # Останавливаем все таймеры
+        if hasattr(self, 'ui_timer'):
+            self.ui_timer.stop()
+        if hasattr(self, 'bell_timer'):
+            self.bell_timer.stop()
+        
+        # Останавливаем воспроизведение и освобождаем ресурсы через cleanup()
+        self.sound_player.cleanup()
+        
+        # Сохраняем настройки
+        self.config.save_preferences(self.config.preferences)
+        
+        # Очищаем кэш событий
+        self.played_events.clear()
+        
+        self.logger.log_event("info", "Resources cleaned up")
 
 
 def main():

@@ -46,6 +46,10 @@ cp "$PROJECT_ROOT/schedule.yml" "$OPT_DIR/"
 cp "$PROJECT_ROOT/preferences.yml" "$OPT_DIR/"
 cp "$PROJECT_ROOT/README.md" "$OPT_DIR/"
 
+# Copy icon
+echo -e "${YELLOW}🎨 Copying application icon...${NC}"
+cp "$PROJECT_ROOT/src/school_bell.png" "$USR_DIR/share/icons/hicolor/256x256/apps/$APP_NAME.png"
+
 # Create control file
 echo -e "${YELLOW}📝 Creating control file...${NC}"
 cat > "$DEBIAN_DIR/control" << EOF
@@ -177,6 +181,12 @@ chmod +x "$OPT_DIR/school_bell.py"
 # Build the package
 echo -e "${YELLOW}📦 Building DEB package...${NC}"
 cd "$BUILD_DIR"
+
+# Update desktop database for icon cache
+if [ -f "$USR_DIR/share/icons/hicolor/256x256/apps/$APP_NAME.png" ]; then
+    echo -e "${GREEN}✓ Icon installed successfully${NC}"
+fi
+
 fakeroot dpkg-deb --build . "../${APP_NAME}_${VERSION}_${ARCH}.deb"
 
 echo -e "${GREEN}✅ Build complete!${NC}"

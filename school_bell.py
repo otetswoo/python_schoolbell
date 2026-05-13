@@ -5,6 +5,7 @@ import sys
 import datetime
 from pathlib import Path
 import platform
+import os
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -12,8 +13,9 @@ from PySide6.QtWidgets import (
     QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
     QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon,
 )
+from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QAction, QColor, QFont, QPalette, QKeySequence, QIcon
-from PySide6.QtCore import Qt, QTimer, QEvent
+from PySide6.QtCore import Qt, QTimer, QEvent, QFile
 
 from src.config import (
     WEEK_DAYS, WEEK_DAYS_RU, WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN,
@@ -105,19 +107,70 @@ class SchoolBell(QMainWindow):
         return self._texts().get(key, fallback if fallback is not None else key)
 
     def init_ui(self):
+        # Загружаем UI из файла .ui
+        ui_file = QFile(os.path.join(os.path.dirname(__file__), "src", "school_bell.ui"))
+        if not ui_file.open(QFile.ReadOnly):
+            raise FileNotFoundError(f"Не удалось открыть файл school_bell.ui: {ui_file.errorString()}")
+        
+        loader = QUiLoader()
+        loader.setBaseInstance(self)
+        self.ui = loader.load(ui_file)
+        ui_file.close()
+        
+        # Устанавливаем заголовок окна
         self.setWindowTitle(self.tr("app_title"))
-        self.resize(800, 600)
-
-        central = QWidget()
-        self.setCentralWidget(central)
-        layout = QVBoxLayout()
-        central.setLayout(layout)
-
-        # Верхняя панель: дни недели слева, чекбоксы справа
-        top_layout = QHBoxLayout()
-
-        # Дни недели
-        self.days_layout = QHBoxLayout()
+        
+        # Получаем ссылки на виджеты из UI
+        self.days_layout = self.findChild(QWidget, "daysLayout").layout() if self.findChild(QWidget, "daysLayout") else QHBoxLayout()
+        self.scheduleTable = self.findChild(QTableWidget, "scheduleTable")
+        self.volumeGroup = self.findChild(QGroupBox, "volumeGroup")
+        self.volumeLayout = self.findChild(QWidget, "volumeLayout").layout() if self.findChild(QWidget, "volumeLayout") else QHBoxLayout()
+        self.statusLabel = self.findChild(QLabel, "statusLabel")
+        
+        # Чекбоксы
+        self.bells_checkbox = self.findChild(QCheckBox, "bellsCheckbox")
+        self.music_checkbox = self.findChild(QCheckBox, "musicCheckbox")
+        self.anthem_checkbox = self.findChild(QCheckBox, "anthemCheckbox")
+        self.announcement_checkbox = self.findChild(QCheckBox, "announcementCheckbox")
+        
+        # Кнопки
+        self.edit_btn = self.findChild(QPushButton, "editButton")
+        self.today_btn = self.findChild(QPushButton, "todayButton")
+        self.bell_btn = self.findChild(QPushButton, "bellButton")
+        self.music_btn = self.findChild(QPushButton, "musicButton")
+        self.anthem_btn = self.findChild(QPushButton, "anthemButton")
+        self.announcement_btn = self.findChild(QPushButton, "announcementButton")
+        self.stop_btn = self.findChild(QPushButton, "stopButton")
+        
+        # Меню
+        self.menuFile = self.findChild(QMenu, "menuFile")
+        self.menuSettings = self.findChild(QMenu, "menuSettings")
+        self.menuHelp = self.findChild(QMenu, "menuHelp")
+        self.menuSounds = self.findChild(QMenu, "menuSounds")
+        self.menuLanguage = self.findChild(QMenu, "menuLanguage")
+        
+        # Действия меню
+        self.actionLoad = self.findChild(QAction, "actionLoad")
+        self.actionSave = self.findChild(QAction, "actionSave")
+        self.actionExit = self.findChild(QAction, "actionExit")
+        self.actionSoundsStart = self.findChild(QAction, "actionSoundsStart")
+        self.actionSoundsEnd = self.findChild(QAction, "actionSoundsEnd")
+        self.actionMusic = self.findChild(QAction, "actionMusic")
+        self.actionAnthem = self.findChild(QAction, "actionAnthem")
+        self.actionAnnouncement = self.findChild(QAction, "actionAnnouncement")
+        self.actionTemplates = self.findChild(QAction, "actionTemplates")
+        self.actionLocaleRu = self.findChild(QAction, "actionLocaleRu")
+        self.actionLocaleEn = self.findChild(QAction, "actionLocaleEn")
+        self.actionAbout = self.findChild(QAction, "actionAbout")
+        self.actionToday = self.findChild(QAction, "actionToday")
+        
+        # Настраиваем таблицу
+        self.scheduleTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.scheduleTable.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.scheduleTable.setSelectionMode(QTableWidget.NoSelection)
+        self.scheduleTable.verticalHeader().setDefaultSectionSize(28)
+        
+        # Инициализируем кнопки дней недели
         self.day_buttons = {}
         for i, (short_ru, short_en) in enumerate(zip(WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN)):
             short = short_ru if self.current_locale == "ru" else short_en
@@ -127,105 +180,53 @@ class SchoolBell(QMainWindow):
             btn.setMinimumHeight(36)
             btn.setToolTip(full + "\nЛКМ - выбрать день\nПКМ - переключить вариант расписания")
             btn.clicked.connect(lambda checked=False, d=full: self.select_day(d))
-            # Добавляем обработчик для переключения варианта по правому клику
             btn.setContextMenuPolicy(Qt.CustomContextMenu)
             btn.customContextMenuRequested.connect(lambda pos, d=full: self.on_day_clicked(d))
             btn.setCheckable(True)
             self.days_layout.addWidget(btn)
             self.day_buttons[full] = btn
 
-        top_layout.addLayout(self.days_layout)
-        top_layout.addStretch()
-
-        # Чекбоксы справа
-        self.bells_checkbox = QCheckBox(self.tr("chk_bells"))
+        # Подключаем чекбоксы
         self.bells_checkbox.setChecked(self.bells_enabled)
         self.bells_checkbox.stateChanged.connect(self.on_bells_toggled)
-        top_layout.addWidget(self.bells_checkbox)
-
-        self.music_checkbox = QCheckBox(self.tr("chk_music"))
+        
         music_settings = self.config.get_music_settings()
         self.music_checkbox.setChecked(music_settings.get("enabled", False))
         self.music_checkbox.stateChanged.connect(self.on_music_toggled)
-        top_layout.addWidget(self.music_checkbox)
-
-        self.anthem_checkbox = QCheckBox(self.tr("chk_anthem"))
+        
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
-        top_layout.addWidget(self.anthem_checkbox)
-
-        self.announcement_checkbox = QCheckBox(self.tr("chk_announcement"))
+        
         announcement_settings = self.config.get_announcement_settings()
         self.announcement_checkbox.setChecked(announcement_settings.get("enabled", False))
         self.announcement_checkbox.stateChanged.connect(self.on_announcement_toggled)
-        top_layout.addWidget(self.announcement_checkbox)
 
-        layout.addLayout(top_layout)
-
-        # Таблица расписания (компактная)
-        self.table = QTableWidget(0, 3)
-        headers = ["Начало", "Конец", "Урок"] if self.current_locale == "ru" else ["Start", "End", "Lesson"]
-        self.table.setHorizontalHeaderLabels(headers)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setSelectionMode(QTableWidget.NoSelection)
-        # Уменьшаем высоту строк для компактности
-        self.table.verticalHeader().setDefaultSectionSize(28)
-        layout.addWidget(self.table)
-
-        # Регулировка громкости часто используемых элементов на главном экране.
-        # Громкость гимна и объявления настраивается в соответствующих диалогах меню.
-        self.volume_group = QGroupBox(self.tr("volume_group"))
-        volume_layout = QHBoxLayout()
-        self.volume_group.setLayout(volume_layout)
-
+        # Создаем контролы громкости
         self.volume_controls = {}
-        self._create_volume_control(volume_layout, "bell", self.config.get_volume("start"))
-        self._create_volume_control(volume_layout, "music", self.config.get_volume("music"))
-        layout.addWidget(self.volume_group)
+        self._create_volume_control(self.volumeLayout, "bell", self.config.get_volume("start"))
+        self._create_volume_control(self.volumeLayout, "music", self.config.get_volume("music"))
 
-        # Нижняя панель: кнопка редактирования и кнопки управления
-        bottom_layout = QHBoxLayout()
-
-        self.edit_btn = QPushButton(self.tr("btn_edit"))
+        # Подключаем кнопки
         self.edit_btn.clicked.connect(self.edit_schedule)
-        bottom_layout.addWidget(self.edit_btn)
-
-        # Кнопки управления правее
-        self.today_btn = QPushButton(self.tr("btn_today"))
         self.today_btn.clicked.connect(self.set_today_schedule)
-        self.today_btn.setToolTip("Нажмите для перехода на текущий день")
-        bottom_layout.addWidget(self.today_btn)
-
-        bottom_layout.addStretch()
-
-        self.bell_btn = QPushButton("▶️ " + self.tr("btn_bell").replace("🔔", "").strip())
         self.bell_btn.clicked.connect(self.manual_bell)
-        bottom_layout.addWidget(self.bell_btn)
-
-        self.music_btn = QPushButton("▶️ " + self.tr("btn_music").replace("🎵", "").strip())
         self.music_btn.clicked.connect(self.manual_music)
-        bottom_layout.addWidget(self.music_btn)
-
-        self.anthem_btn = QPushButton(self._get_anthem_button_text())
         self.anthem_btn.clicked.connect(self.manual_anthem)
-        bottom_layout.addWidget(self.anthem_btn)
-
-        self.announcement_btn = QPushButton(self._get_announcement_button_text())
         self.announcement_btn.clicked.connect(self.manual_announcement)
-        bottom_layout.addWidget(self.announcement_btn)
-
-        self.stop_btn = QPushButton(self.tr("btn_stop"))
         self.stop_btn.clicked.connect(self.manual_stop)
-        bottom_layout.addWidget(self.stop_btn)
-
-        layout.addLayout(bottom_layout)
-
-        self.status_label = QLabel(self.tr("status_ready"))
-        self.status_label.setStyleSheet("background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
-        layout.addWidget(self.status_label)
-
+        
+        # Обновляем текст кнопок
+        self.bell_btn.setText("▶️ " + self.tr("btn_bell").replace("🔔", "").strip())
+        self.music_btn.setText("▶️ " + self.tr("btn_music").replace("🎵", "").strip())
+        self.anthem_btn.setText(self._get_anthem_button_text())
+        self.announcement_btn.setText(self._get_announcement_button_text())
+        
+        # Обновляем статус
+        self.statusLabel.setText(self.tr("status_ready"))
+        self.statusLabel.setStyleSheet("background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
+        
+        # Настраиваем меню
         self.setup_menu()
 
     def _create_volume_control(self, parent_layout, volume_type, value):
@@ -247,78 +248,33 @@ class SchoolBell(QMainWindow):
         self.config.save_preferences(self.config.preferences)
 
     def setup_menu(self):
-        menubar = self.menuBar()
-
-        file_menu = menubar.addMenu(self.tr("menu_file"))
-
-        load_act = QAction(self.tr("action_load"), self)
-        load_act.triggered.connect(self.load_schedule)
-        load_act.setShortcut(QKeySequence("Ctrl+O"))
-        file_menu.addAction(load_act)
-
-        save_act = QAction(self.tr("action_save"), self)
-        save_act.triggered.connect(self.save_schedule)
-        save_act.setShortcut(QKeySequence("Ctrl+S"))
-        file_menu.addAction(save_act)
-
-        file_menu.addSeparator()
-
-        exit_act = QAction(self.tr("action_exit"), self)
-        exit_act.triggered.connect(self.close)
-        exit_act.setShortcut(QKeySequence("Ctrl+Q"))
-        file_menu.addAction(exit_act)
-
-        settings_menu = menubar.addMenu(self.tr("menu_settings"))
-
-        sounds_menu = settings_menu.addMenu(self.tr("menu_sounds"))
-
-        sounds_start_act = QAction(self.tr("action_sounds_start"), self)
-        sounds_start_act.triggered.connect(lambda: self.select_sounds("start"))
-        sounds_menu.addAction(sounds_start_act)
-
-        sounds_end_act = QAction(self.tr("action_sounds_end"), self)
-        sounds_end_act.triggered.connect(lambda: self.select_sounds("end"))
-        sounds_menu.addAction(sounds_end_act)
-
-        music_act = QAction(self.tr("action_music"), self)
-        music_act.triggered.connect(self.show_music_settings)
-        settings_menu.addAction(music_act)
-
-        anthem_act = QAction(self.tr("action_anthem"), self)
-        anthem_act.triggered.connect(self.show_anthem_settings)
-        settings_menu.addAction(anthem_act)
-
-        announcement_act = QAction(self.tr("action_announcement"), self)
-        announcement_act.triggered.connect(self.show_announcement_settings)
-        settings_menu.addAction(announcement_act)
-
-        # Добавляем пункт "Редактировать шаблоны"
-        templates_act = QAction("📚 Редактировать шаблоны", self)
-        templates_act.triggered.connect(self.show_templates_editor)
-        settings_menu.addAction(templates_act)
-
-        locale_menu = settings_menu.addMenu("Language / Язык")
-
-        ru_act = QAction(self.tr("action_locale_ru"), self)
-        ru_act.triggered.connect(lambda: self.set_locale("ru"))
-        locale_menu.addAction(ru_act)
-
-        en_act = QAction(self.tr("action_locale_en"), self)
-        en_act.triggered.connect(lambda: self.set_locale("en"))
-        locale_menu.addAction(en_act)
-
-        # Добавляем меню "Справка"
-        help_menu = menubar.addMenu(self.tr("menu_help"))
-
-        about_act = QAction(self.tr("action_about"), self)
-        about_act.triggered.connect(self.show_about)
-        help_menu.addAction(about_act)
-
-        # Добавляем действие для кнопки "Сегодня" с горячей клавишей Ctrl+T
-        today_act = QAction(self.tr("btn_today"), self)
-        today_act.setShortcut(QKeySequence("Ctrl+T"))
-        today_act.triggered.connect(self.set_today_schedule)
-        self.addAction(today_act)
+        # Подключаем действия меню из UI
+        if self.actionLoad:
+            self.actionLoad.triggered.connect(self.load_schedule)
+        if self.actionSave:
+            self.actionSave.triggered.connect(self.save_schedule)
+        if self.actionExit:
+            self.actionExit.triggered.connect(self.close)
+        if self.actionSoundsStart:
+            self.actionSoundsStart.triggered.connect(lambda: self.select_sounds("start"))
+        if self.actionSoundsEnd:
+            self.actionSoundsEnd.triggered.connect(lambda: self.select_sounds("end"))
+        if self.actionMusic:
+            self.actionMusic.triggered.connect(self.show_music_settings)
+        if self.actionAnthem:
+            self.actionAnthem.triggered.connect(self.show_anthem_settings)
+        if self.actionAnnouncement:
+            self.actionAnnouncement.triggered.connect(self.show_announcement_settings)
+        if self.actionTemplates:
+            self.actionTemplates.triggered.connect(self.show_templates_editor)
+        if self.actionLocaleRu:
+            self.actionLocaleRu.triggered.connect(lambda: self.set_locale("ru"))
+        if self.actionLocaleEn:
+            self.actionLocaleEn.triggered.connect(lambda: self.set_locale("en"))
+        if self.actionAbout:
+            self.actionAbout.triggered.connect(self.show_about)
+        if self.actionToday:
+            self.actionToday.triggered.connect(self.set_today_schedule)
 
     def show_about(self):
         """Показать диалог 'О программе'"""
@@ -383,13 +339,13 @@ class SchoolBell(QMainWindow):
 
         lessons = self.schedule_variants.get(key, {}).get(variant, [])
 
-        self.table.setRowCount(0)
+        self.scheduleTable.setRowCount(0)
         for l in lessons:
-            row = self.table.rowCount()
-            self.table.insertRow(row)
-            self.table.setItem(row, 0, QTableWidgetItem(l.get("start", "")))
-            self.table.setItem(row, 1, QTableWidgetItem(l.get("end", "")))
-            self.table.setItem(row, 2, QTableWidgetItem(str(l.get("num", ""))))
+            row = self.scheduleTable.rowCount()
+            self.scheduleTable.insertRow(row)
+            self.scheduleTable.setItem(row, 0, QTableWidgetItem(l.get("start", "")))
+            self.scheduleTable.setItem(row, 1, QTableWidgetItem(l.get("end", "")))
+            self.scheduleTable.setItem(row, 2, QTableWidgetItem(str(l.get("num", ""))))
 
         self._update_day_buttons_style()
 
@@ -478,7 +434,7 @@ class SchoolBell(QMainWindow):
         if self.config.is_holiday(today_date):
             holiday_text = " 🎉 " + self.tr("holiday", "Праздничный день" if self.current_locale == "ru" else "Holiday")
             status += holiday_text
-            self.status_label.setText(status)
+            self.statusLabel.setText(status)
             self.highlight_table(now)
             return
 
@@ -504,7 +460,7 @@ class SchoolBell(QMainWindow):
         if self.main_window_message:
             status += f"   |   ⚠️ {self.main_window_message}"
 
-        self.status_label.setText(status)
+        self.statusLabel.setText(status)
         self.highlight_table(now)
 
     def get_current_lesson(self, now):
@@ -543,7 +499,7 @@ class SchoolBell(QMainWindow):
         return None, None, None
 
     def highlight_table(self, now):
-        rows = self.table.rowCount()
+        rows = self.scheduleTable.rowCount()
         today = now.date()
 
         # Используем только светлую тему
@@ -553,8 +509,8 @@ class SchoolBell(QMainWindow):
 
         for r in range(rows):
             try:
-                start_str = self.table.item(r, 0).text()
-                end_str = self.table.item(r, 1).text()
+                start_str = self.scheduleTable.item(r, 0).text()
+                end_str = self.scheduleTable.item(r, 1).text()
 
                 start = datetime.datetime.combine(today, self._parse_time(start_str))
                 end = datetime.datetime.combine(today, self._parse_time(end_str))
@@ -566,7 +522,7 @@ class SchoolBell(QMainWindow):
                     bg = color_soon
 
                 for c in range(3):
-                    item = self.table.item(r, c)
+                    item = self.scheduleTable.item(r, c)
                     if item:
                         item.setBackground(bg)
 
@@ -602,7 +558,7 @@ class SchoolBell(QMainWindow):
         message_changed = self.main_window_message != message
         self.main_window_message = message
         if hasattr(self, "status_label"):
-            self.status_label.setText(f"⚠️ {message}")
+            self.statusLabel.setText(f"⚠️ {message}")
         if message_changed:
             self.logger.log_event("warning", message)
 
@@ -664,7 +620,7 @@ class SchoolBell(QMainWindow):
             self._clear_main_window_message()
             self.played_events[cache_key] = True
             if status_text:
-                self.status_label.setText(status_text)
+                self.statusLabel.setText(status_text)
             if log_message:
                 category = "bell" if event_type in {"start", "end"} else event_type
                 self.logger.log_event(category, log_message)
@@ -854,7 +810,7 @@ class SchoolBell(QMainWindow):
             msg = f"Мелодия '{'начала' if bell_type == 'start' else 'окончания'}' установлена"
             if self.current_locale == "en":
                 msg = f"'{'Start' if bell_type == 'start' else 'End'}' bell melody set"
-            self.status_label.setText(msg)
+            self.statusLabel.setText(msg)
 
     def show_music_settings(self):
         dlg = MusicSettingsDialog(self, self.config)
@@ -894,12 +850,12 @@ class SchoolBell(QMainWindow):
             btn.setText(short)
 
         self.edit_btn.setText(texts["btn_edit"])
-        self.status_label.setText(texts["status_ready"])
+        self.statusLabel.setText(texts["status_ready"])
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
         self.anthem_checkbox.setText(texts["chk_anthem"])
         self.announcement_checkbox.setText(texts["chk_announcement"])
-        self.volume_group.setTitle(texts["volume_group"])
+        self.volumeGroup.setTitle(texts["volume_group"])
         for volume_type, control in self.volume_controls.items():
             control.set_title(texts[f"volume_{volume_type}"])
         # Обновляем текст кнопки Сегодня (только надпись, без даты)
@@ -911,7 +867,7 @@ class SchoolBell(QMainWindow):
         self.stop_btn.setText(texts["btn_stop"])
 
         headers = ["Начало", "Конец", "Урок"] if locale == "ru" else ["Start", "End", "Lesson"]
-        self.table.setHorizontalHeaderLabels(headers)
+        self.scheduleTable.setHorizontalHeaderLabels(headers)
 
         # Обновляем меню после смены языка
         self.menuBar().clear()
@@ -990,7 +946,7 @@ class SchoolBell(QMainWindow):
             start_volume = volumes.get("start", 100)
             if self.sound_player.play(path, "start", volume=start_volume):
                 self._clear_main_window_message()
-                self.status_label.setText(f"🔔 {self.tr('btn_bell').replace('🔔', '').strip()}!")
+                self.statusLabel.setText(f"🔔 {self.tr('btn_bell').replace('🔔', '').strip()}!")
                 self.logger.log_event("bell", f"Manual start bell: {Path(path).name}")
         else:
             self._set_main_window_message(
@@ -1025,7 +981,7 @@ class SchoolBell(QMainWindow):
                 self._clear_main_window_message()
                 self.music_player.mark_played()
                 self.current_playing_track = str(track)
-                self.status_label.setText(f"🎵 {self.tr('btn_music').replace('🎵', '').strip()}!")
+                self.statusLabel.setText(f"🎵 {self.tr('btn_music').replace('🎵', '').strip()}!")
                 self.logger.log_event("music", "Manual music playback")
             else:
                 self._set_main_window_message(
@@ -1052,7 +1008,7 @@ class SchoolBell(QMainWindow):
         anthem_volume = self.config.get_volume("anthem")
         if self.sound_player.play(str(anthem_path), "anthem", volume=anthem_volume):
             self._clear_main_window_message()
-            self.status_label.setText(f"🎼 {self.tr('btn_anthem').replace('🎼', '').strip()}!")
+            self.statusLabel.setText(f"🎼 {self.tr('btn_anthem').replace('🎼', '').strip()}!")
             self.logger.log_event("anthem", f"Manual anthem: {anthem_path.name}")
 
     def check_anthem(self, now):
@@ -1118,7 +1074,7 @@ class SchoolBell(QMainWindow):
         announcement_volume = self.config.get_volume("announcement")
         if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
             self._clear_main_window_message()
-            self.status_label.setText(
+            self.statusLabel.setText(
                 f"📢 {self.tr('btn_announcement').replace('📢', '').strip()}!"
             )
             self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
@@ -1198,7 +1154,7 @@ class SchoolBell(QMainWindow):
         """Остановка воспроизведения звонка, музыки, гимна и объявления"""
         self.sound_player.stop_all()
         self.current_playing_track = None
-        self.status_label.setText(f"🛑 {self.tr('btn_stop').replace('🛑', '').strip()}!")
+        self.statusLabel.setText(f"🛑 {self.tr('btn_stop').replace('🛑', '').strip()}!")
         self.logger.log_event("stop", "Playback stopped by user")
 
     def setup_tray_icon(self):

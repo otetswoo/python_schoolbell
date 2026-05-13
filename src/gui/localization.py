@@ -20,7 +20,7 @@ LOCALIZATION = {
         "action_locale_ru": "Русский",
         "action_locale_en": "English",
         "action_about": "О программе",
-        "btn_edit": "Редактировать расписание",
+        "btn_edit": "Ред.расписание",
         "status_ready": "Готов к работе",
         "chk_bells": "Звонки",
         "chk_music": "Музыка на переменах",

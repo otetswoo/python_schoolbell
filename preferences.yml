@@ -8,8 +8,9 @@ anthem:
   day: monday
   enabled: true
   file: /mnt/files/Музыка/Избранное ЯМ/Fight_Nights_-_Salvador_67208043.mp3
-  time: 08:30
-last_saved: '2026-05-13T10:26:59.681214'
+  time: 08:32
+last_saved: '2026-05-13T12:03:46.456567'
+locale: ru
 music:
   delay_minutes: 2
   enabled: true
@@ -30,3 +31,4 @@ variants:
   Суббота: none
 volumes:
   anthem: 100
+  music: 40

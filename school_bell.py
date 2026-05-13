@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QLabel, QMenu, QFileDialog, QMessageBox,
     QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
     QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon,
+    QFrame,
 )
 from PySide6.QtGui import QColor, QFont, QPalette, QKeySequence, QIcon, QAction
 from PySide6.QtCore import Qt, QTimer, QEvent

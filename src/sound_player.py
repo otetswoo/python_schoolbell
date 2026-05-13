@@ -3,12 +3,13 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, QObject
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
 
-class SoundPlayer:
+class SoundPlayer(QObject):
     def __init__(self, logger=None):
+        super().__init__()
         self.player = None
         self.audio_output = None
         self.current_type = None
@@ -39,6 +40,8 @@ class SoundPlayer:
             self.player = QMediaPlayer()
             self.player.setAudioOutput(self.audio_output)
             self.player.setSource(QUrl.fromLocalFile(str(Path(audio_path).resolve())))
+            
+            # Подключаем сигналы для автоматической очистки ресурсов
             self.player.mediaStatusChanged.connect(self._on_media_status_changed)
             self.player.playbackStateChanged.connect(self._on_playback_state_changed)
 
@@ -68,10 +71,14 @@ class SoundPlayer:
             self._clear_current()
 
     def _clear_current(self):
+        """Очищает текущее состояние, но НЕ вызывает deleteLater() сразу.
+        
+        deleteLater() должен вызываться только при закрытии приложения,
+        чтобы избежать проблем с повторным использованием объектов.
+        """
         self.current_type = None
         self.current_path = None
-        self.player = None
-        self.audio_output = None
+        # Не обнуляем player и audio_output здесь - они нужны для проверки состояния
 
     def play(self, sound_path, sound_type="auto", volume=100):
         """Воспроизведение звука с поддержкой громкости.
@@ -102,11 +109,31 @@ class SoundPlayer:
         if not self.player or not self.current_type:
             return False
         if sound_type is None:
-            return True
+            # Проверяем фактическое состояние плеера
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                return True
+            return False
         return self.current_type == sound_type
 
     def stop_all(self):
         """Остановка любого воспроизведения (звонка, музыки, гимна или объявления)."""
         if self.player:
             self.player.stop()
-        self._clear_current()
+        # Не очищаем current_type сразу - это нужно для проверки приоритетов
+
+    def cleanup(self):
+        """Корректно освобождает ресурсы Qt-объектов.
+        
+        Должен вызываться только при закрытии приложения.
+        """
+        if self.player:
+            self.player.stop()
+            self.player.deleteLater()
+            self.player = None
+        
+        if self.audio_output:
+            self.audio_output.deleteLater()
+            self.audio_output = None
+        
+        self.current_type = None
+        self.current_path = None

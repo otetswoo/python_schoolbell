@@ -81,7 +81,7 @@ setup(
             os.path.join(ROOT_DIR, "school_bell.py"),
             base=base,
             target_name="SchoolBell.exe",
-            icon=None,  # Add your icon path here: icon="icon.ico"
+            icon=os.path.join(ROOT_DIR, "build_scripts", "icon.ico"),
             shortcut_name="School Bell",
             shortcut_dir="DesktopFolder",
         )

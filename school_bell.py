@@ -113,8 +113,7 @@ class SchoolBell(QMainWindow):
             raise FileNotFoundError(f"Не удалось открыть файл school_bell.ui: {ui_file.errorString()}")
         
         loader = QUiLoader()
-        loader.setBaseInstance(self)
-        self.ui = loader.load(ui_file)
+        self.ui = loader.load(ui_file, self)
         ui_file.close()
         
         # Устанавливаем заголовок окна

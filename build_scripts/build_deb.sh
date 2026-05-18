@@ -41,7 +41,7 @@ echo -e "${YELLOW}📁 Copying application files...${NC}"
 cp -r "$PROJECT_ROOT/school_bell.py" "$OPT_DIR/"
 cp -r "$PROJECT_ROOT/src" "$OPT_DIR/"
 cp -r "$PROJECT_ROOT/sounds" "$OPT_DIR/"
-cp -r "$PROJECT_ROOT/logs" "$OPT_DIR/" 2>/dev/null || true
+mkdir -p "$OPT_DIR/logs"
 cp "$PROJECT_ROOT/schedule.yml" "$OPT_DIR/"
 cp "$PROJECT_ROOT/preferences.yml" "$OPT_DIR/"
 cp "$PROJECT_ROOT/README.md" "$OPT_DIR/"
@@ -89,6 +89,10 @@ echo "Setting up School Bell..."
 # Create symlink in /usr/bin
 ln -sf /opt/$APP_NAME/school_bell.py /usr/bin/$APP_NAME
 chmod +x /usr/bin/$APP_NAME
+
+# Create logs directory with proper permissions
+mkdir -p /opt/$APP_NAME/logs
+chmod 755 /opt/$APP_NAME/logs
 
 # Update desktop database
 if [ -x /usr/bin/update-desktop-database ]; then
@@ -177,6 +181,7 @@ find "$BUILD_DIR" -type f -exec chmod 644 {} \;
 find "$BUILD_DIR" -type d -exec chmod 755 {} \;
 chmod 755 "$DEBIAN_DIR"/*
 chmod +x "$OPT_DIR/school_bell.py"
+chmod 755 "$OPT_DIR/logs"
 
 # Build the package
 echo -e "${YELLOW}📦 Building DEB package...${NC}"

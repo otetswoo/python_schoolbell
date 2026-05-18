@@ -1,5 +1,14 @@
 ```
-# Python
+# Build artifacts
+build/
+dist/
+
+# Package files
+*.deb
+
+# Dependencies
+.venv/
+venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -8,7 +17,6 @@ __pycache__/
 # Logs and temp files
 *.log
 *.tmp
-*.swp
 
 # Environment
 .env
@@ -18,4 +26,23 @@ __pycache__/
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+
+# Distribution
+*.egg-info/
+MANIFEST
 ```

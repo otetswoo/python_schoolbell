@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=School Bell
+Name[ru]=Школьные звонки
+Comment=School Bell Automation System
+Comment[ru]=Автоматизация школьных звонков
+Exec=/opt/school-bell/school_bell.py
+Icon=school-bell
+Terminal=false
+Type=Application
+Categories=Utility;Education;
+Keywords=school;bell;schedule;automation;
+Keywords[ru]=школа;звонок;расписание;автоматизация;

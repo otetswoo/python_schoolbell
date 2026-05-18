@@ -1,0 +1,34 @@
+announcement:
+  date: ''
+  enabled: false
+  file: ''
+  played: false
+  time: 08:30
+anthem:
+  day: monday
+  enabled: true
+  file: /mnt/files/Музыка/Избранное ЯМ/Fight_Nights_-_Salvador_67208043.mp3
+  time: 08:32
+last_saved: '2026-05-13T12:03:46.456567'
+locale: ru
+music:
+  delay_minutes: 2
+  enabled: true
+  folder: /mnt/files/Музыка/user- Русский рок
+sounds:
+  end: sounds/Ringinout.wav
+  start: /home/oldnetbook/python_schoolbell/sounds/Ringin.wav
+theme: light
+variants:
+  friday: usual
+  monday: usual
+  saturday: usual
+  sunday: usual
+  thursday: usual
+  tuesday: usual
+  wednesday: usual
+  Воскресенье: none
+  Суббота: none
+volumes:
+  anthem: 100
+  music: 40

@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+
+echo "Setting up School Bell..."
+
+# Create symlink in /usr/bin
+ln -sf /opt/school-bell/school_bell.py /usr/bin/school-bell
+chmod +x /usr/bin/school-bell
+
+# Create logs directory with proper permissions
+mkdir -p /opt/school-bell/logs
+chmod 755 /opt/school-bell/logs
+
+# Update desktop database
+if [ -x /usr/bin/update-desktop-database ]; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+
+echo "Installation complete!"
+echo "You can now run 'school-bell' from the applications menu or terminal."
+exit 0

@@ -117,7 +117,12 @@ class MusicSettingsDialog(QDialog):
             folder_name = Path(folder_path).name or folder_path
             folder_item = QTreeWidgetItem([f"📁 {folder_name}"])
             folder_item.setData(0, Qt.UserRole, folder_path)
-            folder_item.setFlags(folder_item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsTristate)
+            tristate_flag = getattr(Qt, "ItemIsAutoTristate", None)
+            if tristate_flag is None and hasattr(Qt, "ItemFlag"):
+                tristate_flag = getattr(Qt.ItemFlag, "ItemIsAutoTristate", None)
+            if tristate_flag is None:
+                tristate_flag = 0
+            folder_item.setFlags(folder_item.flags() | Qt.ItemIsUserCheckable | tristate_flag)
             self.file_list.addTopLevelItem(folder_item)
             self.folder_items.append(folder_item)
 

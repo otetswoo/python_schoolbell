@@ -397,7 +397,7 @@ class SchoolBell(QMainWindow):
             self.sound_player.set_volume(value)
         else:
             self.config.set_volume(volume_type, value)
-            if volume_type == "music" and self.music_player.is_playing:
+            if volume_type == "music" and self.sound_player.is_playing("music"):
                 self.sound_player.set_volume(value)
         self.config.save_preferences(self.config.preferences)
 

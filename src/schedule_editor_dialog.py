@@ -13,7 +13,8 @@ from src.config import WEEK_DAYS_RU, WEEK_DAYS
 class ScheduleEditorDialog(QDialog):
     def __init__(self, parent, day_ru, variant, lessons, schedule_variants=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Редактор: {day_ru} ({variant})")
+        variant_ru = {"usual": "обычное", "short": "сокращённое", "none": "нет занятий"}.get(variant, variant)
+        self.setWindowTitle(f"Редактор: {day_ru} ({variant_ru})")
         self.resize(500, 400)
         
         self.parent_window = parent
@@ -83,9 +84,28 @@ class ScheduleEditorDialog(QDialog):
             self.list.addItem(item)
     
     def add_lesson(self):
-        dlg = LessonDialog(self)
+        next_num = (max((l.get("num", 0) for l in self.lessons), default=0) + 1)
+        dlg = LessonDialog(self, {"num": next_num, "start": "08:00", "end": "08:40"})
         if dlg.exec() == QDialog.Accepted:
-            self.lessons.append(dlg.get_data())
+            new_lesson = dlg.get_data()
+            existing = next((i for i, l in enumerate(self.lessons) if l.get("num") == new_lesson["num"]), None)
+            if existing is not None:
+                existing_start = self.lessons[existing].get("start", "00:00")
+                action = "ниже" if new_lesson["start"] >= existing_start else "выше"
+                reply = QMessageBox.question(
+                    self,
+                    "Номер уже существует",
+                    f"Урок №{new_lesson['num']} уже задан.\n"
+                    f"Заменить существующий урок или вставить {action} него?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply == QMessageBox.Yes:
+                    self.lessons[existing] = new_lesson
+                else:
+                    self.lessons.append(new_lesson)
+            else:
+                self.lessons.append(new_lesson)
+            self.lessons.sort(key=lambda l: l.get("start", "99:99"))
             self.renumber()
             self.refresh()
     

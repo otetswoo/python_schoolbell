@@ -183,7 +183,7 @@ class SchoolBell(QMainWindow):
         # === НИЖНЯЯ ЧАСТЬ: Громкость, кнопки, статус ===
         
         # Группа громкости
-        self.volumeGroup = QGroupBox(self.tr("grp_volume", "Volume"))
+        self.volumeGroup = QGroupBox(self.tr("volume_group", "Volume"))
         self.volumeLayout = QHBoxLayout(self.volumeGroup)
         main_layout.addWidget(self.volumeGroup)
         
@@ -394,8 +394,11 @@ class SchoolBell(QMainWindow):
         if volume_type == "bell":
             self.config.set_volume("start", value)
             self.config.set_volume("end", value)
+            self.sound_player.set_volume(value)
         else:
             self.config.set_volume(volume_type, value)
+            if volume_type == "music" and self.music_player.is_playing:
+                self.sound_player.set_volume(value)
         self.config.save_preferences(self.config.preferences)
 
     def _create_menu(self):
@@ -417,8 +420,8 @@ class SchoolBell(QMainWindow):
         
         self.menuFile.addAction(self.actionLoad)
         self.menuFile.addAction(self.actionSave)
-        self.menuFile.addAction(self.actionExportSettings)
         self.menuFile.addAction(self.actionImportSettings)
+        self.menuFile.addAction(self.actionExportSettings)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionExit)
         menubar.addMenu(self.menuFile)
@@ -613,7 +616,7 @@ class SchoolBell(QMainWindow):
             if variant == "short":
                 btn.setText(short + " (К)")
             elif variant == "none":
-                btn.setText(short + " (X)")
+                btn.setText(short + " (Нет)")
             else:
                 btn.setText(short)
 

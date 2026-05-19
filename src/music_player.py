@@ -15,6 +15,7 @@ class MusicPlayer:
         self.delay_minutes = 2
         self.sound_player = sound_player
         self.logger = logger
+        self.selected_tracks = set()
         
     def set_music_folder(self, folder):
         if folder and Path(folder).exists():
@@ -23,6 +24,9 @@ class MusicPlayer:
             return True
         return False
     
+    def set_selected_tracks(self, tracks):
+        self.selected_tracks = set(tracks or [])
+
     def get_audio_files(self):
         if not self.music_folder or not self.music_folder.exists():
             return []
@@ -32,6 +36,8 @@ class MusicPlayer:
         for f in self.music_folder.iterdir():
             if f.is_file() and f.suffix.lower() in extensions:
                 files.append(f)
+        if self.selected_tracks:
+            files = [f for f in files if f.name in self.selected_tracks]
         return files
     
     def get_next_track(self):

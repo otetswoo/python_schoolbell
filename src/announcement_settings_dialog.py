@@ -3,9 +3,9 @@
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
-    QDateEdit, QTimeEdit, QCheckBox
+    QDateEdit, QCheckBox, QSpinBox
 )
-from PySide6.QtCore import QDate, QTime
+from PySide6.QtCore import QDate
 
 from src.config_manager import ConfigManager
 from src.volume_control import VolumeControl
@@ -54,10 +54,15 @@ class AnnouncementSettingsDialog(QDialog):
 
         time_layout = QHBoxLayout()
         time_layout.addWidget(QLabel("Время:"))
-        self.time_edit = QTimeEdit()
-        self.time_edit.setDisplayFormat("HH:mm")
-        self.time_edit.setTime(QTime(8, 30))
-        time_layout.addWidget(self.time_edit)
+        self.hour_spin = QSpinBox()
+        self.hour_spin.setRange(0, 23)
+        self.hour_spin.setValue(8)
+        self.minute_spin = QSpinBox()
+        self.minute_spin.setRange(0, 59)
+        self.minute_spin.setValue(30)
+        time_layout.addWidget(self.hour_spin)
+        time_layout.addWidget(QLabel(":"))
+        time_layout.addWidget(self.minute_spin)
         time_layout.addStretch()
         layout.addLayout(time_layout)
 
@@ -66,6 +71,7 @@ class AnnouncementSettingsDialog(QDialog):
             self.config.get_volume("announcement"),
             self,
         )
+        self.volume_control.value_changed.connect(lambda v: self.config.set_volume("announcement", v))
         layout.addWidget(self.volume_control)
 
         btn_layout = QHBoxLayout()
@@ -99,7 +105,8 @@ class AnnouncementSettingsDialog(QDialog):
         time_str = announcement.get("time", "08:30")
         try:
             h, m = map(int, time_str.split(":")[:2])
-            self.time_edit.setTime(QTime(h, m))
+            self.hour_spin.setValue(h)
+            self.minute_spin.setValue(m)
         except ValueError:
             pass
 
@@ -131,6 +138,6 @@ class AnnouncementSettingsDialog(QDialog):
             self.config.preferences["announcement"] = {}
         self.config.preferences["announcement"]["enabled"] = self.enabled_checkbox.isChecked()
         self.config.set_announcement_date(self.date_edit.date().toString("yyyy-MM-dd"))
-        self.config.set_announcement_time(self.time_edit.time().toString("HH:mm"))
+        self.config.set_announcement_time(f"{self.hour_spin.value():02d}:{self.minute_spin.value():02d}")
         self.config.set_volume("announcement", self.volume_control.value())
         super().accept()

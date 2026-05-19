@@ -3,9 +3,8 @@
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
-    QComboBox, QTimeEdit
+    QComboBox, QSpinBox
 )
-from PySide6.QtCore import QTime
 from src.config_manager import ConfigManager
 from src.config import WEEK_DAYS_RU, WEEK_DAYS
 from src.volume_control import VolumeControl
@@ -56,14 +55,20 @@ class AnthemSettingsDialog(QDialog):
         time_label = QLabel("Время:")
         time_layout.addWidget(time_label)
         
-        self.time_edit = QTimeEdit()
-        self.time_edit.setTime(QTime(8, 30))
-        self.time_edit.setDisplayFormat("HH:mm")
-        time_layout.addWidget(self.time_edit)
+        self.hour_spin = QSpinBox()
+        self.hour_spin.setRange(0, 23)
+        self.hour_spin.setValue(8)
+        self.minute_spin = QSpinBox()
+        self.minute_spin.setRange(0, 59)
+        self.minute_spin.setValue(30)
+        time_layout.addWidget(self.hour_spin)
+        time_layout.addWidget(QLabel(":"))
+        time_layout.addWidget(self.minute_spin)
         time_layout.addStretch()
         layout.addLayout(time_layout)
 
         self.volume_control = VolumeControl("Громкость гимна:", self.config.get_volume("anthem"), self)
+        self.volume_control.value_changed.connect(lambda v: self.config.set_volume("anthem", v))
         layout.addWidget(self.volume_control)
         
         # Кнопки
@@ -98,7 +103,8 @@ class AnthemSettingsDialog(QDialog):
         time_str = anthem.get("time", "08:30")
         try:
             h, m = map(int, time_str.split(":"))
-            self.time_edit.setTime(QTime(h, m))
+            self.hour_spin.setValue(h)
+            self.minute_spin.setValue(m)
         except:
             pass
     
@@ -117,7 +123,7 @@ class AnthemSettingsDialog(QDialog):
         day = self.day_combo.currentData()
         self.config.set_anthem_day(day)
         
-        time_str = self.time_edit.time().toString("HH:mm")
+        time_str = f"{self.hour_spin.value():02d}:{self.minute_spin.value():02d}"
         self.config.set_anthem_time(time_str)
         self.config.set_volume("anthem", self.volume_control.value())
         

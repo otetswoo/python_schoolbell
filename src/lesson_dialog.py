@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFormLayout, QLineEdit, QSpinBox, QComboBox, QListWidget, QListWidgetItem, QMessageBox, QDialogButtonBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QFormLayout, QSpinBox, QComboBox, QMessageBox, QDialogButtonBox, QWidget, QHBoxLayout
 from PySide6.QtCore import Qt
 from src.config import BREAK_DURATIONS
 
@@ -23,9 +23,18 @@ class LessonDialog(QDialog):
         self.num_spin.setMaximum(99)
         form.addRow("Номер урока:", self.num_spin)
         
-        self.start_edit = QLineEdit()
-        self.start_edit.setPlaceholderText("HH:MM")
-        form.addRow("Время начала:", self.start_edit)
+        time_widget = QWidget()
+        time_layout = QHBoxLayout(time_widget)
+        time_layout.setContentsMargins(0, 0, 0, 0)
+        self.start_hour = QSpinBox()
+        self.start_hour.setRange(0, 23)
+        self.start_minute = QSpinBox()
+        self.start_minute.setRange(0, 59)
+        time_layout.addWidget(self.start_hour)
+        time_layout.addWidget(QLabel(":"))
+        time_layout.addWidget(self.start_minute)
+        time_layout.addStretch()
+        form.addRow("Время начала:", time_widget)
         
         self.duration_spin = QSpinBox()
         self.duration_spin.setMinimum(20)
@@ -44,7 +53,8 @@ class LessonDialog(QDialog):
         self.end_label.setStyleSheet("font-weight: bold; color: #2196f3;")
         form.addRow("Окончание урока:", self.end_label)
         
-        self.start_edit.textChanged.connect(self.update_end_time)
+        self.start_hour.valueChanged.connect(self.update_end_time)
+        self.start_minute.valueChanged.connect(self.update_end_time)
         self.duration_spin.valueChanged.connect(self.update_end_time)
         
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -52,9 +62,14 @@ class LessonDialog(QDialog):
         bb.rejected.connect(self.reject)
         layout.addWidget(bb)
         
+        self.start_hour.setValue(8)
+        self.start_minute.setValue(0)
         if lesson:
             self.num_spin.setValue(lesson.get("num", 1))
-            self.start_edit.setText(lesson.get("start", ""))
+            start_text = lesson.get("start", "08:00")
+            h, m = map(int, start_text.split(":"))
+            self.start_hour.setValue(h)
+            self.start_minute.setValue(m)
             if "end" in lesson and "start" in lesson:
                 try:
                     from datetime import datetime
@@ -67,30 +82,22 @@ class LessonDialog(QDialog):
         
         self.update_end_time()
     
+    def _start_text(self):
+        return f"{self.start_hour.value():02d}:{self.start_minute.value():02d}"
+
     def update_end_time(self):
-        start_text = self.start_edit.text().strip()
-        try:
-            from datetime import datetime, timedelta
-            start = datetime.strptime(start_text, "%H:%M")
-            duration = self.duration_spin.value()
-            end = start + timedelta(minutes=duration)
-            self.end_label.setText(end.strftime("%H:%M"))
-        except:
-            self.end_label.setText("--:--")
+        from datetime import datetime, timedelta
+        start = datetime.strptime(self._start_text(), "%H:%M")
+        duration = self.duration_spin.value()
+        end = start + timedelta(minutes=duration)
+        self.end_label.setText(end.strftime("%H:%M"))
     
     def validate_and_accept(self):
-        start_text = self.start_edit.text().strip()
-        try:
-            from datetime import datetime
-            datetime.strptime(start_text, "%H:%M")
-        except:
-            QMessageBox.warning(self, "Ошибка", "Время в формате HH:MM")
-            return
         super().accept()
     
     def get_data(self):
         from datetime import datetime, timedelta
-        start = datetime.strptime(self.start_edit.text().strip(), "%H:%M")
+        start = datetime.strptime(self._start_text(), "%H:%M")
         duration = self.duration_spin.value()
         end = start + timedelta(minutes=duration)
         break_duration = self.break_combo.currentData()

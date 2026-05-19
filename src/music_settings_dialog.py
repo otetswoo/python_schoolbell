@@ -48,6 +48,10 @@ class MusicSettingsDialog(QDialog):
         self.select_all_btn.clicked.connect(self.select_all_tracks)
         controls.addWidget(self.select_all_btn)
 
+        self.unselect_all_btn = QPushButton("⬜ Снять все")
+        self.unselect_all_btn.clicked.connect(self.unselect_all_tracks)
+        controls.addWidget(self.unselect_all_btn)
+
         self.clear_btn = QPushButton("❌ Очистить")
         self.clear_btn.clicked.connect(self.clear_folders)
         controls.addWidget(self.clear_btn)
@@ -67,7 +71,7 @@ class MusicSettingsDialog(QDialog):
             p = Path(folder)
             if not p.exists():
                 continue
-            for f in p.iterdir():
+            for f in p.rglob("*"):
                 if f.is_file() and f.suffix.lower() in extensions:
                     files.append(f)
         return sorted(files, key=lambda x: (str(x.parent), x.name.lower()))
@@ -121,19 +125,26 @@ class MusicSettingsDialog(QDialog):
         self.config.preferences["music"] = music
 
     def select_folders(self):
-        folders = QFileDialog.getExistingDirectoryUrl(self, "Выберите папку с музыкой")
-        # fallback for platforms without URL-based multi-select
-        if folders and folders.isValid():
-            first = folders.toLocalFile()
-            if first and first not in self.music_folders:
-                self.music_folders.append(first)
-                self._update_folder_label()
-                self.update_file_list()
-                self._save_music_state()
+        folder = QFileDialog.getExistingDirectory(self, "Выберите папку с музыкой")
+        while folder:
+            if folder not in self.music_folders:
+                self.music_folders.append(folder)
+            folder = QFileDialog.getExistingDirectory(
+                self,
+                "Выберите следующую папку с музыкой (Отмена — завершить выбор)",
+            )
+        self._update_folder_label()
+        self.update_file_list()
+        self._save_music_state()
 
     def select_all_tracks(self):
         for item in self.track_items:
             item.setCheckState(Qt.Checked)
+        self._save_music_state()
+
+    def unselect_all_tracks(self):
+        for item in self.track_items:
+            item.setCheckState(Qt.Unchecked)
         self._save_music_state()
 
     def clear_folders(self):

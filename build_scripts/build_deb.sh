@@ -58,7 +58,7 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: $ARCH
-Depends: python3, python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets, python3-yaml
+Depends: python3, python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets, python3-pyside6.qtmultimedia, python3-yaml
 Maintainer: $MAINTAINER
 Description: $DESCRIPTION
  School Bell is an automation system for school bells with flexible scheduling and music during breaks.
@@ -135,7 +135,7 @@ Name=School Bell
 Name[ru]=Школьные звонки
 Comment=School Bell Automation System
 Comment[ru]=Автоматизация школьных звонков
-Exec=/opt/$APP_NAME/school_bell.py
+Exec=/opt/$APP_NAME/launch.sh
 Icon=$APP_NAME
 Terminal=false
 Type=Application

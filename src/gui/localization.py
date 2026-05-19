@@ -11,8 +11,7 @@ LOCALIZATION = {
         "action_load": "Загрузить расписание",
         "action_save": "Сохранить расписание",
         "action_exit": "Выход",
-        "action_sounds_start": "На урок",
-        "action_sounds_end": "С урока",
+        "action_sounds": "Мелодии звонков...",
         "menu_sounds": "Мелодии звонков",
         "action_music": "Музыка на переменах",
         "action_anthem": "Гимн",
@@ -22,6 +21,8 @@ LOCALIZATION = {
         "action_about": "О программе",
         "btn_edit": "Ред.расписание",
         "status_ready": "Готов к работе",
+        "status_lessons_finished": "Уроки закончились",
+        "bell_settings_saved": "Мелодии звонков обновлены",
         "chk_bells": "Звонки",
         "chk_music": "Музыка на переменах",
         "chk_anthem": "Гимн",
@@ -56,7 +57,7 @@ LOCALIZATION = {
         "announcement_playing": "Сейчас воспроизводится объявление. Музыка не будет запущена.",
         "about_title": "О программе",
         "about_text": "<h2>Школьные звонки</h2>"
-                        "<p>Автоматизация школьных звонков с гибким расписанием, музыкой на переменах и темами оформления.</p>"
+                        "<p>Автоматизация школьных звонков с гибким расписанием, музыкой на переменах и гимном и объявлениями.</p>"
                         "<p><b>Версия:</b> 1.0</p>"
                         "<p><b>Репозиторий GitHub:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
                         "<p><b>Лицензия:</b> MIT</p>",
@@ -70,8 +71,7 @@ LOCALIZATION = {
         "action_load": "Load Schedule",
         "action_save": "Save Schedule",
         "action_exit": "Exit",
-        "action_sounds_start": "Start Lesson",
-        "action_sounds_end": "End Lesson",
+        "action_sounds": "Bell melodies...",
         "menu_sounds": "Bell Melodies",
         "action_music": "Break Music",
         "action_anthem": "Anthem",
@@ -81,6 +81,8 @@ LOCALIZATION = {
         "action_about": "About",
         "btn_edit": "Edit Schedule",
         "status_ready": "Ready",
+        "status_lessons_finished": "Lessons are finished",
+        "bell_settings_saved": "Bell melodies updated",
         "chk_bells": "Bells",
         "chk_music": "Break Music",
         "chk_anthem": "Anthem",
@@ -115,7 +117,7 @@ LOCALIZATION = {
         "announcement_playing": "An announcement is playing now. Music will not start.",
         "about_title": "About",
         "about_text": "<h2>School Bell</h2>"
-                        "<p>School bell automation with flexible schedule, break music and themes.</p>"
+                        "<p>School bell automation with flexible schedule, break music anthem and announcements.</p>"
                         "<p><b>Version:</b> 1.0</p>"
                         "<p><b>GitHub Repository:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
                         "<p><b>License:</b> MIT</p>",

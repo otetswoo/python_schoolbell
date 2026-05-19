@@ -94,7 +94,7 @@ LOCALIZATION = {
         "action_templates": "Templates Editor",
         "menu_language": "Language",
         "action_today": "Today",
-        "action_locale_ru": "Русский",
+        "action_locale_ru": "Russian",
         "action_locale_en": "English",
         "action_about": "About",
         "btn_edit": "Edit Schedule",

@@ -25,6 +25,7 @@ from src.sound_player import SoundPlayer
 from src.music_player import MusicPlayer
 from src.lesson_dialog import LessonDialog
 from src.music_settings_dialog import MusicSettingsDialog
+from src.bell_settings_dialog import BellSettingsDialog
 from src.schedule_editor_dialog import ScheduleEditorDialog
 from src.gui.localization import LOCALIZATION
 from src.event_logger import EventLogger
@@ -333,10 +334,8 @@ class SchoolBell(QMainWindow):
         
         # Подменю Sounds
         self.menuSounds = QMenu(self.tr("menu_sounds", "Sounds"), self.menuSettings)
-        self.actionSoundsStart = QAction(self.tr("action_sounds_start", "Start Lesson..."), self.menuSounds)
-        self.actionSoundsEnd = QAction(self.tr("action_sounds_end", "End Lesson..."), self.menuSounds)
-        self.menuSounds.addAction(self.actionSoundsStart)
-        self.menuSounds.addAction(self.actionSoundsEnd)
+        self.actionSounds = QAction(self.tr("action_sounds", "Bell melodies..."), self.menuSounds)
+        self.menuSounds.addAction(self.actionSounds)
         
         self.actionMusic = QAction(self.tr("action_music", "Music Break..."), self)
         self.actionAnthem = QAction(self.tr("action_anthem", "Anthem..."), self)
@@ -374,8 +373,7 @@ class SchoolBell(QMainWindow):
         self.actionLoad.triggered.connect(self.load_schedule)
         self.actionSave.triggered.connect(self.save_schedule)
         self.actionExit.triggered.connect(self.close)
-        self.actionSoundsStart.triggered.connect(lambda: self.select_sounds("start"))
-        self.actionSoundsEnd.triggered.connect(lambda: self.select_sounds("end"))
+        self.actionSounds.triggered.connect(self.show_bell_settings)
         self.actionMusic.triggered.connect(self.show_music_settings)
         self.actionAnthem.triggered.connect(self.show_anthem_settings)
         self.actionAnnouncement.triggered.connect(self.show_announcement_settings)
@@ -614,6 +612,8 @@ class SchoolBell(QMainWindow):
                 status += f"   |   Следующий звонок через {next_mins} мин {next_secs} сек"
             else:
                 status += f"   |   Next bell in {next_mins} min {next_secs} sec"
+        else:
+            status += f"   |   {self.tr('status_lessons_finished', 'Lessons are finished')}"
 
         # Добавляем индикатор текущего воспроизведения
         if hasattr(self, 'current_playing_track') and self.current_playing_track:
@@ -989,21 +989,13 @@ class SchoolBell(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", str(e))
 
-    def select_sounds(self, bell_type):
-        title = "Звук начала урока" if bell_type == "start" else "Звук окончания урока"
-        if self.current_locale == "en":
-            title = "Start Lesson Sound" if bell_type == "start" else "End Lesson Sound"
-
-        path, _ = QFileDialog.getOpenFileName(self, title, "", "Audio (*.wav *.mp3)")
-        if path:
-            self.sounds[bell_type] = path
-            self.config.set_sound(bell_type, path)
+    def show_bell_settings(self):
+        dlg = BellSettingsDialog(self, self.sounds, self.current_locale)
+        if dlg.exec() == QDialog.Accepted:
+            for bell_type in ("start", "end"):
+                self.config.set_sound(bell_type, self.sounds.get(bell_type, ""))
             self.config.save_preferences(self.config.preferences)
-
-            msg = f"Мелодия '{'начала' if bell_type == 'start' else 'окончания'}' установлена"
-            if self.current_locale == "en":
-                msg = f"'{'Start' if bell_type == 'start' else 'End'}' bell melody set"
-            self.statusLabel.setText(msg)
+            self.statusLabel.setText(self.tr("bell_settings_saved", "Bell melodies updated"))
 
     def show_music_settings(self):
         dlg = MusicSettingsDialog(self, self.config)

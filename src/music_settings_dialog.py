@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
-    QListWidget, QListWidgetItem
+    QTreeWidget, QTreeWidgetItem
 )
 
 from src.config_manager import ConfigManager
@@ -21,6 +21,7 @@ class MusicSettingsDialog(QDialog):
 
         self.music_folders = []
         self.track_items = []
+        self.folder_items = []
 
         layout = QVBoxLayout(self)
 
@@ -36,7 +37,9 @@ class MusicSettingsDialog(QDialog):
         self.folder_label.setStyleSheet("font-weight: bold; padding: 6px;")
         layout.addWidget(self.folder_label)
 
-        self.file_list = QListWidget()
+        self.file_list = QTreeWidget()
+        self.file_list.setHeaderHidden(True)
+        self.file_list.itemChanged.connect(self.on_item_changed)
         layout.addWidget(self.file_list)
 
         controls = QHBoxLayout()
@@ -95,29 +98,56 @@ class MusicSettingsDialog(QDialog):
     def update_file_list(self, selected_tracks=None):
         self.file_list.clear()
         self.track_items = []
+        self.folder_items = []
         selected = set(selected_tracks or [])
         files = self._audio_files()
 
         if not files:
-            item = QListWidgetItem("📭 В выбранных папках нет аудиофайлов")
-            item.setForeground(Qt.gray)
-            self.file_list.addItem(item)
+            item = QTreeWidgetItem(["📭 В выбранных папках нет аудиофайлов"])
+            item.setForeground(0, Qt.gray)
+            self.file_list.addTopLevelItem(item)
             return
 
+        folders = {}
         for track in files:
-            rel_name = f"{track.parent.name}/{track.name}"
-            item = QListWidgetItem(f"🎵 {rel_name}")
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setData(Qt.UserRole, str(track))
-            item.setCheckState(Qt.Checked if not selected or str(track) in selected else Qt.Unchecked)
-            self.file_list.addItem(item)
-            self.track_items.append(item)
+            folder = str(track.parent)
+            folders.setdefault(folder, []).append(track)
+
+        for folder_path in sorted(folders.keys()):
+            folder_name = Path(folder_path).name or folder_path
+            folder_item = QTreeWidgetItem([f"📁 {folder_name}"])
+            folder_item.setData(0, Qt.UserRole, folder_path)
+            folder_item.setFlags(folder_item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsTristate)
+            self.file_list.addTopLevelItem(folder_item)
+            self.folder_items.append(folder_item)
+
+            checked_count = 0
+            tracks = sorted(folders[folder_path], key=lambda x: x.name.lower())
+            for track in tracks:
+                child = QTreeWidgetItem([f"   🎵 {track.name}"])
+                child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
+                child.setData(0, Qt.UserRole, str(track))
+                is_checked = (not selected) or (str(track) in selected)
+                child.setCheckState(0, Qt.Checked if is_checked else Qt.Unchecked)
+                if is_checked:
+                    checked_count += 1
+                folder_item.addChild(child)
+                self.track_items.append(child)
+
+            if checked_count == 0:
+                folder_item.setCheckState(0, Qt.Unchecked)
+            elif checked_count == len(tracks):
+                folder_item.setCheckState(0, Qt.Checked)
+            else:
+                folder_item.setCheckState(0, Qt.PartiallyChecked)
+
+        self.file_list.expandAll()
 
     def _save_music_state(self):
         selected_tracks = [
-            item.data(Qt.UserRole)
+            item.data(0, Qt.UserRole)
             for item in self.track_items
-            if item.checkState() == Qt.Checked
+            if item.checkState(0) == Qt.Checked
         ]
         self.config.set_music_folders(self.music_folders)
         music = self.config.get_music_settings()
@@ -139,12 +169,16 @@ class MusicSettingsDialog(QDialog):
 
     def select_all_tracks(self):
         for item in self.track_items:
-            item.setCheckState(Qt.Checked)
+            item.setCheckState(0, Qt.Checked)
+        for item in self.folder_items:
+            item.setCheckState(0, Qt.Checked)
         self._save_music_state()
 
     def unselect_all_tracks(self):
         for item in self.track_items:
-            item.setCheckState(Qt.Unchecked)
+            item.setCheckState(0, Qt.Unchecked)
+        for item in self.folder_items:
+            item.setCheckState(0, Qt.Unchecked)
         self._save_music_state()
 
     def clear_folders(self):
@@ -155,9 +189,15 @@ class MusicSettingsDialog(QDialog):
         self.config.preferences["music"] = music
         self._update_folder_label()
         self.file_list.clear()
-        item = QListWidgetItem("✅ Музыка отключена")
-        item.setForeground(Qt.green)
-        self.file_list.addItem(item)
+        item = QTreeWidgetItem(["✅ Музыка отключена"])
+        item.setForeground(0, Qt.green)
+        self.file_list.addTopLevelItem(item)
+
+
+    def on_item_changed(self, item, _column):
+        if item.childCount() > 0:
+            return
+        self._save_music_state()
 
     def accept(self):
         self._save_music_state()

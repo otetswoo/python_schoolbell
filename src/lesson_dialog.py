@@ -58,6 +58,8 @@ class LessonDialog(QDialog):
         self.duration_spin.valueChanged.connect(self.update_end_time)
         
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("OK")
+        bb.button(QDialogButtonBox.Cancel).setText("Отмена")
         bb.accepted.connect(self.validate_and_accept)
         bb.rejected.connect(self.reject)
         layout.addWidget(bb)

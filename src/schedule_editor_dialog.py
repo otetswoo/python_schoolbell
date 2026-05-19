@@ -73,6 +73,8 @@ class ScheduleEditorDialog(QDialog):
         layout.addLayout(btn_layout)
         
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("OK")
+        bb.button(QDialogButtonBox.Cancel).setText("Отмена")
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         layout.addWidget(bb)

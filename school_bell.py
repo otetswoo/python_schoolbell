@@ -364,6 +364,31 @@ class SchoolBell(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, self.tr("error_title", "Error"), str(e))
 
+    def import_all_settings(self):
+        """Импортирует все настройки приложения из YAML-файла экспорта."""
+        fname, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("action_import_settings", "Import all settings..."),
+            str(SCHEDULE_PATH.parent),
+            "YAML (*.yml *.yaml)",
+        )
+        if not fname:
+            return
+        try:
+            import yaml
+            with open(fname, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            self.config.schedule_data = data.get("schedule", {}) or {}
+            self.config.preferences = data.get("preferences", {}) or {}
+            self.current_locale = data.get("runtime", {}).get("current_locale", self.config.get_locale())
+            self.config.save_schedule(self.config.schedule_data)
+            self.config.save_preferences(self.config.preferences)
+            self.load_data()
+            self._retranslate_ui()
+            QMessageBox.information(self, "OK", self.tr("export_settings_done", "Settings exported successfully"))
+        except Exception as e:
+            QMessageBox.critical(self, self.tr("error_title", "Error"), str(e))
+
     def on_volume_changed(self, volume_type, value):
         """Сохраняет изменения громкости из ползунков главного окна."""
         if volume_type == "bell":
@@ -385,12 +410,15 @@ class SchoolBell(QMainWindow):
         self.actionSave.setShortcut(QKeySequence("Ctrl+S"))
         self.actionExportSettings = QAction(self.tr("action_export_settings", "Export all settings..."), self)
         self.actionExportSettings.setShortcut(QKeySequence("Ctrl+E"))
+        self.actionImportSettings = QAction(self.tr("action_import_settings", "Import all settings..."), self)
+        self.actionImportSettings.setShortcut(QKeySequence("Ctrl+I"))
         self.actionExit = QAction(self.tr("action_exit", "Exit"), self)
         self.actionExit.setShortcut(QKeySequence("Ctrl+Q"))
         
         self.menuFile.addAction(self.actionLoad)
         self.menuFile.addAction(self.actionSave)
         self.menuFile.addAction(self.actionExportSettings)
+        self.menuFile.addAction(self.actionImportSettings)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionExit)
         menubar.addMenu(self.menuFile)
@@ -398,10 +426,7 @@ class SchoolBell(QMainWindow):
         # Меню Settings
         self.menuSettings = QMenu(self.tr("menu_settings", "Settings"), menubar)
         
-        # Подменю Sounds
-        self.menuSounds = QMenu(self.tr("menu_sounds", "Sounds"), self.menuSettings)
-        self.actionSounds = QAction(self.tr("action_sounds", "Bell melodies..."), self.menuSounds)
-        self.menuSounds.addAction(self.actionSounds)
+        self.actionSounds = QAction(self.tr("action_sounds", "Bell melodies..."), self.menuSettings)
         
         self.actionMusic = QAction(self.tr("action_music", "Music Break..."), self)
         self.actionAnthem = QAction(self.tr("action_anthem", "Anthem..."), self)
@@ -415,7 +440,7 @@ class SchoolBell(QMainWindow):
         self.menuLanguage.addAction(self.actionLocaleRu)
         self.menuLanguage.addAction(self.actionLocaleEn)
         
-        self.menuSettings.addMenu(self.menuSounds)
+        self.menuSettings.addAction(self.actionSounds)
         self.menuSettings.addAction(self.actionMusic)
         self.menuSettings.addAction(self.actionAnthem)
         self.menuSettings.addAction(self.actionAnnouncement)
@@ -439,6 +464,7 @@ class SchoolBell(QMainWindow):
         self.actionLoad.triggered.connect(self.load_schedule)
         self.actionSave.triggered.connect(self.save_schedule)
         self.actionExportSettings.triggered.connect(self.export_all_settings)
+        self.actionImportSettings.triggered.connect(self.import_all_settings)
         self.actionExit.triggered.connect(self.close)
         self.actionSounds.triggered.connect(self.show_bell_settings)
         self.actionMusic.triggered.connect(self.show_music_settings)
@@ -486,9 +512,10 @@ class SchoolBell(QMainWindow):
         sounds.update(prefs.get("sounds", {}))
         self.sounds = sounds
 
-        music = prefs.get("music", {})
-        if music.get("enabled") and music.get("folder"):
-            self.music_player.set_music_folder(music["folder"])
+        music = self.config.get_music_settings()
+        folders = music.get("folders", [])
+        if music.get("enabled") and folders:
+            self.music_player.set_music_folders(folders)
 
         # Загружаем шаблоны из текущего профиля
         current_profile = self.config.get_current_profile()
@@ -914,11 +941,11 @@ class SchoolBell(QMainWindow):
                 return
 
         music_settings = self.config.get_music_settings()
-        folder = music_settings.get("folder", "")
-        if folder and not self.music_player.music_folder:
-            self.music_player.set_music_folder(folder)
+        folders = music_settings.get("folders", [])
+        if folders and not self.music_player.music_folders:
+            self.music_player.set_music_folders(folders)
 
-        if not self.music_player.music_folder:
+        if not self.music_player.music_folders:
             self._set_main_window_message(
                 "missing_music_folder",
                 "Папка с музыкой не выбрана. Выберите папку в настройках.",
@@ -937,7 +964,13 @@ class SchoolBell(QMainWindow):
             self.current_playing_track = None
             return
 
+        selected_tracks = set(music_settings.get("selected_tracks", []))
         track = self.music_player.get_next_track()
+        if selected_tracks:
+            attempts = 0
+            while track and str(track) not in selected_tracks and attempts < 200:
+                track = self.music_player.get_next_track()
+                attempts += 1
         if track:
             self.sound_player.play_music(str(track), volume=music_volume)
             self._clear_main_window_message()
@@ -1068,8 +1101,9 @@ class SchoolBell(QMainWindow):
         dlg = MusicSettingsDialog(self, self.config)
         if dlg.exec() == QDialog.Accepted:
             music = self.config.get_music_settings()
-            if music.get("folder"):
-                self.music_player.set_music_folder(music["folder"])
+            folders = music.get("folders", [])
+            if folders:
+                self.music_player.set_music_folders(folders)
             self.config.save_preferences(self.config.preferences)
 
     def show_anthem_settings(self):
@@ -1126,10 +1160,10 @@ class SchoolBell(QMainWindow):
         self.actionLoad.setText(texts["action_load"])
         self.actionSave.setText(texts["action_save"])
         self.actionExportSettings.setText(texts["action_export_settings"])
+        self.actionImportSettings.setText(texts["action_import_settings"])
         self.actionExit.setText(texts["action_exit"])
 
         self.menuSettings.setTitle(texts["menu_settings"])
-        self.menuSounds.setTitle(texts["menu_sounds"])
         self.actionSounds.setText(texts["action_sounds"])
         self.actionMusic.setText(texts["action_music"])
         self.actionAnthem.setText(texts["action_anthem"])
@@ -1163,8 +1197,8 @@ class SchoolBell(QMainWindow):
         self.config.preferences["music"] = music_settings
         self.config.save_preferences(self.config.preferences)
         if self.music_enabled:
-            folder = music_settings.get("folder", "")
-            if not folder or not self.music_player.set_music_folder(folder):
+            folders = music_settings.get("folders", [])
+            if not folders or not self.music_player.set_music_folders(folders):
                 self._set_main_window_message(
                     "missing_music_folder",
                     "Папка с музыкой не выбрана или не найдена.",
@@ -1233,9 +1267,9 @@ class SchoolBell(QMainWindow):
             return
 
         music_settings = self.config.get_music_settings()
-        folder = music_settings.get("folder", "")
-        if folder:
-            if not self.music_player.set_music_folder(folder):
+        folders = music_settings.get("folders", [])
+        if folders:
+            if not self.music_player.set_music_folders(folders):
                 self._set_main_window_message(
                     "missing_music_folder",
                     "Папка с музыкой не выбрана или не найдена.",
@@ -1506,7 +1540,7 @@ class SchoolBell(QMainWindow):
             dialog.setIcon(QMessageBox.Question)
             stay_button = dialog.addButton(stay_button_text, QMessageBox.YesRole)
             exit_button = dialog.addButton(exit_button_text, QMessageBox.NoRole)
-            dialog.addButton(QMessageBox.Cancel)
+            cancel_button = dialog.addButton(self.tr("btn_cancel", "Отмена"), QMessageBox.RejectRole)
             dialog.setDefaultButton(stay_button)
             dialog.exec()
 
@@ -1526,6 +1560,8 @@ class SchoolBell(QMainWindow):
                 self._cleanup_resources()
                 self.logger.log_event("info", "Application closed from close dialog")
                 event.accept()
+            elif clicked_button == cancel_button:
+                event.ignore()
             else:
                 event.ignore()
             return

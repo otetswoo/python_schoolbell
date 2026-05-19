@@ -80,16 +80,25 @@ class ConfigManager:
         self.preferences["sounds"][sound_type] = path
 
     def get_music_settings(self):
-        music = self.preferences.get("music", {})
-        if not music:
-            music = DEFAULT_SCHEDULE["music"].copy()
+        music = DEFAULT_SCHEDULE["music"].copy()
+        music.update(self.preferences.get("music", {}))
+        if "folders" not in music:
+            folder = music.get("folder", "")
+            music["folders"] = [folder] if folder else []
+        if "selected_tracks" not in music:
+            music["selected_tracks"] = []
         return music
 
     def set_music_folder(self, folder):
+        self.set_music_folders([folder] if folder else [])
+
+    def set_music_folders(self, folders):
         if "music" not in self.preferences:
             self.preferences["music"] = {}
-        self.preferences["music"]["folder"] = folder
-        self.preferences["music"]["enabled"] = bool(folder)
+        clean = [f for f in (folders or []) if f]
+        self.preferences["music"]["folders"] = clean
+        self.preferences["music"]["folder"] = clean[0] if clean else ""
+        self.preferences["music"]["enabled"] = bool(clean)
 
     def get_anthem_settings(self):
         anthem = self.preferences.get("anthem", {})

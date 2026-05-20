@@ -14,6 +14,7 @@ class MusicPlayer:
         self.delay_minutes = 2
         self.sound_player = sound_player
         self.logger = logger
+        self.is_music_playing_callback = None  # Callback для уведомления об окончании музыки
         
     @property
     def music_folder(self):
@@ -87,3 +88,9 @@ class MusicPlayer:
         """Остановка музыки через общий SoundPlayer"""
         if self.sound_player:
             self.sound_player.stop_all()
+    
+    def check_music_finished(self):
+        """Проверяет, закончилась ли музыка, и уведомляет через callback."""
+        if self.sound_player and not self.sound_player.is_playing("music"):
+            if self.is_music_playing_callback:
+                self.is_music_playing_callback()

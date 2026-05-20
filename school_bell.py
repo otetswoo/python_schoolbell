@@ -57,6 +57,8 @@ class SchoolBell(QMainWindow):
 
         self.sound_player = SoundPlayer(logger=self.logger)
         self.music_player = MusicPlayer(sound_player=self.sound_player, logger=self.logger)
+        # Устанавливаем callback для уведомления об окончании музыки
+        self.music_player.is_music_playing_callback = self._on_music_finished
 
         self.schedule_variants = {}
         self.day_variants = {d: "usual" for d in WEEK_DAYS_RU}
@@ -99,6 +101,15 @@ class SchoolBell(QMainWindow):
         self.bell_timer = QTimer()
         self.bell_timer.timeout.connect(self.check_bells)
         self.bell_timer.start(500)
+        
+        # Таймер для проверки окончания музыки
+        self.music_check_timer = QTimer()
+        self.music_check_timer.timeout.connect(self._check_music_status)
+        self.music_check_timer.start(1000)
+
+    def _check_music_status(self):
+        """Проверяет, закончилась ли музыка на перемене."""
+        self.music_player.check_music_finished()
 
     def _texts(self, locale=None):
         """Возвращает локализацию с fallback на русский для новых/отсутствующих ключей."""
@@ -678,7 +689,7 @@ class SchoolBell(QMainWindow):
         time_str = now.strftime("%H:%M")
         status = f"{self.tr('btn_today').replace('📅', '').strip()} {day_name}, {now.day} {month_name} {time_str}"
 
-        cur, seconds_left, next_seconds = self.get_current_lesson(now)
+        cur, seconds_left, next_seconds, is_break = self.get_current_lesson(now)
 
         # Проверяем, не праздник ли сегодня
         today_date = now.date()
@@ -686,7 +697,7 @@ class SchoolBell(QMainWindow):
             holiday_text = " 🎉 " + self.tr("holiday", "Праздничный день" if self.current_locale == "ru" else "Holiday")
             status += holiday_text
             self.statusLabel.setText(status)
-            self.highlight_table(now)
+            self.highlight_table(now, is_break=is_break)
             return
 
         if cur:
@@ -702,6 +713,14 @@ class SchoolBell(QMainWindow):
             else:
                 status += f" ({bell_mins}:{bell_secs:02d} to bell)"
                 
+        elif is_break:
+            # Сейчас перемена - показываем время до следующего урока
+            next_mins = next_seconds // 60
+            next_secs = next_seconds % 60
+            if self.current_locale == "ru":
+                status += f"   |   Перемена, следующий урок через {next_mins} мин {next_secs} сек"
+            else:
+                status += f"   |   Break, next lesson in {next_mins} min {next_secs} sec"
         elif next_seconds is not None and next_seconds > 0:
             # Показываем время до следующего звонка
             next_mins = next_seconds // 60
@@ -723,16 +742,16 @@ class SchoolBell(QMainWindow):
             status += f"   |   ⚠️ {self.main_window_message}"
 
         self.statusLabel.setText(status)
-        self.highlight_table(now)
+        self.highlight_table(now, is_break=is_break)
 
     def get_current_lesson(self, now):
         """Возвращает текущий урок и информацию о следующем звонке
 
         Returns:
-            tuple: (текущий_урок, секунд_осталось, секунд_до_следующего)
+            tuple: (текущий_урок, секунд_осталось, секунд_до_следующего, является_ли_переменой)
         """
         if not self.current_day:
-            return None, None, None
+            return None, None, None, False
 
         idx = WEEK_DAYS_RU.index(self.current_day)
         key = WEEK_DAYS[idx]
@@ -751,16 +770,31 @@ class SchoolBell(QMainWindow):
         # Проверяем, на уроке ли мы сейчас
         for s, e, l in parsed:
             if s <= now <= e:
-                return l, int((e - now).total_seconds()), None
+                return l, int((e - now).total_seconds()), None, False
 
-        # Ищем следующий звонок
+        # Проверяем, на перемене ли мы сейчас (между уроками)
+        for i in range(len(parsed) - 1):
+            s_curr, e_curr, l_curr = parsed[i]
+            s_next, e_next, l_next = parsed[i + 1]
+            
+            if e_curr < now < s_next:
+                # Сейчас перемена между уроками
+                return None, None, int((s_next - now).total_seconds()), True
+        
+        # Ищем следующий звонок (первый урок дня)
         for s, e, l in parsed:
             if now < s:
-                return None, None, int((s - now).total_seconds())
+                return None, None, int((s - now).total_seconds()), False
 
-        return None, None, None
+        return None, None, None, False
 
-    def highlight_table(self, now):
+    def highlight_table(self, now, is_break=False):
+        """Подсвечивает текущий урок или перемену в таблице.
+        
+        Args:
+            now: текущее время
+            is_break: True если сейчас перемена (для явного выделения)
+        """
         rows = self.scheduleTable.rowCount()
         today = now.date()
 
@@ -768,6 +802,8 @@ class SchoolBell(QMainWindow):
         color_current = COLOR_CURRENT_LIGHT
         color_soon = COLOR_SOON_LIGHT
         color_normal = COLOR_NORMAL_LIGHT
+        
+        last_ended_row = None  # Для отслеживания последнего завершившегося урока
 
         for r in range(rows):
             try:
@@ -779,10 +815,16 @@ class SchoolBell(QMainWindow):
 
                 bg = color_normal
                 if start <= now <= end:
-                    # Текущий урок/перемена - выделяем цветом
+                    # Текущий урок - выделяем зеленым цветом
                     bg = color_current
+                elif end < now:
+                    # Урок уже закончился
+                    last_ended_row = r
+                    if is_break:
+                        # Если сейчас перемена, подсвечиваем последний завершившийся урок желтым
+                        bg = color_soon
                 elif 0 <= (start - now).total_seconds() <= 120:
-                    # Скоро начнется - подсвечиваем другим цветом
+                    # Скоро начнется - подсвечиваем желтым
                     bg = color_soon
 
                 # Применяем цвет ко всем ячейкам строки (включая столбец с переменой)
@@ -1473,6 +1515,10 @@ class SchoolBell(QMainWindow):
             return "▶️ " + btn_text
         else:
             return "⏸️ " + btn_text
+
+    def _on_music_finished(self):
+        """Вызывается когда музыка закончилась - очищает статус трека."""
+        self.current_playing_track = None
 
     def manual_stop(self):
         """Остановка воспроизведения звонка, музыки, гимна и объявления"""

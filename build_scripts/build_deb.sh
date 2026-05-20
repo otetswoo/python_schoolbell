@@ -66,14 +66,16 @@ DEBIAN_DIR="$BUILD_DIR/DEBIAN"
 USR_DIR="$BUILD_DIR/usr"
 LIB_DIR="$BUILD_DIR/usr/lib/school-bell"
 
-# Clean previous build
-echo -e "${YELLOW}🧹 Cleaning previous build...${NC}"
-rm -rf "$BUILD_DIR"
+# Create directories
 mkdir -p "$DEBIAN_DIR"
 mkdir -p "$LIB_DIR"
 mkdir -p "$USR_DIR/share/applications"
 mkdir -p "$USR_DIR/share/icons/hicolor/256x256/apps"
-mkdir -p "$USR/bin"
+mkdir -p "$USR_DIR/bin"
+
+# Clean previous build
+echo -e "${YELLOW}🧹 Cleaning previous build...${NC}"
+rm -rf "$BUILD_DIR"
 
 # Copy source files to lib directory
 echo -e "${YELLOW}📁 Copying application files...${NC}"

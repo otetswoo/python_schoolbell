@@ -1,4 +1,19 @@
-```bash
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
+dist/
+build/
+target/
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+.mypy_cache/
+.pytest_cache/
+
 # Logs and temp files
 *.log
 *.tmp
@@ -7,45 +22,20 @@
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
 
 # Editors
 .vscode/
 .idea/
 
-# Dependencies
-node_modules/
-.venv/
-venv/
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-.julia/
-zig*/
-julia-*/
-
-# Build artifacts
-build/
-dist/
-target/
-.gradle/
-*.o
-*.obj
-*.out
-*.exe
-*.dll
-*.so
-*.a
-*.pyc
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Coverage
+# Coverage reports
 coverage/
 htmlcov/
 .coverage
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # Compressed files
 *.zip
@@ -70,4 +60,3 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```

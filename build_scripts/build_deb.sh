@@ -131,7 +131,20 @@ set -e
 
 echo "Setting up School Bell..."
 
-# Create data directory for user data
+# Get the home directory of the user who installed (or default to /root for system-wide)
+if [ -n "\$SUDO_USER" ]; then
+    USER_HOME=\$(eval echo ~\$SUDO_USER)
+else
+    USER_HOME=\$HOME
+fi
+
+# Create data directory for user data in user's home directory
+DATA_DIR="\$USER_HOME/.local/share/school-bell"
+mkdir -p "\$DATA_DIR/music"
+mkdir -p "\$DATA_DIR/logs"
+chmod -R 755 "\$DATA_DIR"
+
+# Also create a system-wide data directory as fallback
 mkdir -p /var/lib/school-bell
 chmod 755 /var/lib/school-bell
 

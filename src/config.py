@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import os
 from pathlib import Path
 
 # Version of the application
@@ -20,8 +21,22 @@ ROOT = BASE_PATH
 SCHEDULE_PATH = ROOT / "schedule.yml"
 PREFERENCES_FILE = ROOT / "preferences.yml"
 SOUNDS_DIR = ROOT / "sounds"
-MUSIC_DIR = ROOT / "music"
-LOGS_DIR = ROOT / "logs"
+
+# For installed system packages, use user-writable directories for data
+# Check if running from system installation path
+if str(ROOT).startswith("/usr/lib"):
+    # System installation - use user data directories
+    HOME = Path.home()
+    DATA_ROOT = HOME / ".local" / "share" / "school-bell"
+    MUSIC_DIR = DATA_ROOT / "music"
+    LOGS_DIR = DATA_ROOT / "logs"
+    # For preferences and schedule in system install, also use user directory
+    PREFERENCES_FILE = DATA_ROOT / "preferences.yml"
+    SCHEDULE_PATH = DATA_ROOT / "schedule.yml"
+else:
+    # Development/standalone mode - use local directories
+    MUSIC_DIR = ROOT / "music"
+    LOGS_DIR = ROOT / "logs"
 
 WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 WEEK_DAYS_RU = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
@@ -93,5 +108,6 @@ DEFAULT_SCHEDULE = {
 
 
 def ensure_dirs():
-    for d in [SOUNDS_DIR, MUSIC_DIR, LOGS_DIR]:
+    for d in [MUSIC_DIR, LOGS_DIR]:
         d.mkdir(parents=True, exist_ok=True)
+    # SOUNDS_DIR is read-only in system installation, don't try to create it

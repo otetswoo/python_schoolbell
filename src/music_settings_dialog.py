@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
-    QTreeWidget, QTreeWidgetItem
+    QTreeWidget, QTreeWidgetItem, QSpinBox
 )
 
 from src.config_manager import ConfigManager
@@ -32,6 +32,18 @@ class MusicSettingsDialog(QDialog):
         )
         info.setWordWrap(True)
         layout.addWidget(info)
+
+        # Поле задержки музыки
+        delay_layout = QHBoxLayout()
+        delay_label = QLabel("Задержка музыки после звонка:")
+        delay_layout.addWidget(delay_label)
+        self.delay_spinbox = QSpinBox()
+        self.delay_spinbox.setRange(0, 10)
+        self.delay_spinbox.setSuffix(" мин")
+        self.delay_spinbox.setValue(2)
+        delay_layout.addWidget(self.delay_spinbox)
+        delay_layout.addStretch()
+        layout.addLayout(delay_layout)
 
         self.folder_label = QLabel("Папки: не выбраны")
         self.folder_label.setStyleSheet("font-weight: bold; padding: 6px;")
@@ -84,6 +96,13 @@ class MusicSettingsDialog(QDialog):
         self.music_folders = music.get("folders", [])
         if not self.music_folders and music.get("folder"):
             self.music_folders = [music.get("folder")]
+        # Загружаем значение задержки
+        delay = music.get("delay_minutes", 2)
+        try:
+            delay = int(delay)
+        except (TypeError, ValueError):
+            delay = 2
+        self.delay_spinbox.setValue(delay)
         self._update_folder_label()
         self.update_file_list(music.get("selected_tracks", []))
 
@@ -157,6 +176,8 @@ class MusicSettingsDialog(QDialog):
         self.config.set_music_folders(self.music_folders)
         music = self.config.get_music_settings()
         music["selected_tracks"] = selected_tracks
+        # Сохраняем задержку музыки
+        music["delay_minutes"] = self.delay_spinbox.value()
         self.config.preferences["music"] = music
 
     def select_folders(self):

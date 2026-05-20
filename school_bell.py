@@ -231,6 +231,7 @@ class SchoolBell(QMainWindow):
         self.statusLabel = QLabel(self.tr("status_ready", "Ready"))
         self.statusLabel.setMinimumHeight(35)
         self.statusLabel.setStyleSheet("background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
+        self.statusLabel.setWordWrap(True)
         main_layout.addWidget(self.statusLabel)
         
         # Создаем контейнер для кнопок дней недели
@@ -626,9 +627,11 @@ class SchoolBell(QMainWindow):
             short = WEEK_DAYS_SHORT[idx] if self.current_locale == "ru" else WEEK_DAYS_SHORT_EN[idx]
 
             if variant == "short":
-                btn.setText(short + " (К)")
+                suffix = "(К)" if self.current_locale == "ru" else "(S)"
+                btn.setText(short + f" {suffix}")
             elif variant == "none":
-                btn.setText(short + " (Нет)")
+                suffix = self.tr("no_schedule", "Нет") if self.current_locale == "ru" else self.tr("no_schedule", "No")
+                btn.setText(short + f" ({suffix})")
             else:
                 btn.setText(short)
 
@@ -687,7 +690,12 @@ class SchoolBell(QMainWindow):
         month_name = month_names_ru[now.month - 1] if self.current_locale == "ru" else month_names_en[now.month - 1]
 
         time_str = now.strftime("%H:%M")
-        status = f"{self.tr('btn_today').replace('📅', '').strip()} {day_name}, {now.day} {month_name} {time_str}"
+        # Форматируем дату с жирным выделением для лучшей читаемости
+        if self.current_locale == "ru":
+            date_html = f"<b>{day_name}, {now.day} {month_name}</b> {time_str}"
+        else:
+            date_html = f"<b>{day_name}, {month_name} {now.day}</b> {time_str}"
+        status = f"{self.tr('btn_today').replace('📅', '').strip()} {date_html}"
 
         cur, seconds_left, next_seconds, is_break = self.get_current_lesson(now)
 
@@ -696,6 +704,7 @@ class SchoolBell(QMainWindow):
         if self.config.is_holiday(today_date):
             holiday_text = " 🎉 " + self.tr("holiday", "Праздничный день" if self.current_locale == "ru" else "Holiday")
             status += holiday_text
+            self.statusLabel.setTextFormat(Qt.RichText)
             self.statusLabel.setText(status)
             self.highlight_table(now, is_break=is_break)
             return
@@ -741,6 +750,7 @@ class SchoolBell(QMainWindow):
         if self.main_window_message:
             status += f"   |   ⚠️ {self.main_window_message}"
 
+        self.statusLabel.setTextFormat(Qt.RichText)
         self.statusLabel.setText(status)
         self.highlight_table(now, is_break=is_break)
 

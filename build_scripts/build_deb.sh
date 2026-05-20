@@ -13,6 +13,10 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}📦 School Bell - DEB Package Builder${NC}"
 echo "=========================================="
 
+# Get project root directory (parent of build_scripts)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # Check for required tools
 check_requirements() {
     local missing=0
@@ -47,19 +51,22 @@ check_requirements() {
 
 check_requirements
 
+# Get version from src/config.py
+VERSION=$(grep -E '^VERSION\s*=' "$PROJECT_ROOT/src/config.py" | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+if [ -z "$VERSION" ]; then
+    VERSION="1.0.0"
+fi
+echo -e "${YELLOW}📋 Version: ${VERSION}${NC}"
+
 # Configuration
 APP_NAME="school-bell"
-VERSION=${1:-"1.0.0"}
 MAINTAINER="otetswoo"
 DESCRIPTION="School Bell Automation System / Автоматизация школьных звонков"
 ARCH="all"
 
 # Directories
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$ROOT_DIR")"
 BUILD_DIR="$PROJECT_ROOT/build/deb"
 DEBIAN_DIR="$BUILD_DIR/DEBIAN"
-OPT_DIR="$BUILD_DIR/opt/$APP_NAME"
 USR_DIR="$BUILD_DIR/usr"
 LIB_DIR="$BUILD_DIR/usr/lib/school-bell"
 

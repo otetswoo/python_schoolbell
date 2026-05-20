@@ -1,39 +1,11 @@
 ```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
 # Build artifacts
 build/
-dist/
-*.spec
 
-# Executables and scripts
-*.bat
+# Installer scripts
+*.iss
+*.wxs
+
+# Build scripts
 *.sh
-
-# Dependencies
-.venv/
-venv/
-env/
-
-# Logs and temp files
-*.log
-*.tmp
-
-# Editors
-.vscode/
-.idea/
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Environment
-.env
-.env.local
-*.env.*
 ```

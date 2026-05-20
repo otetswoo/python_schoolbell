@@ -112,7 +112,8 @@ Depends: python3,
          python3-pyside6.qtgui,
          python3-pyside6.qtwidgets,
          python3-pyside6.qtmultimedia,
-         python3-yaml
+         python3-yaml,
+         python3-mutagen
 Maintainer: $MAINTAINER
 Description: $DESCRIPTION
  School Bell is an automation system for school bells with flexible scheduling and music during breaks.

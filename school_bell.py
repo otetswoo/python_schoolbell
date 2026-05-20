@@ -3,6 +3,7 @@
 
 import sys
 import datetime
+import weakref
 from pathlib import Path
 import platform
 
@@ -385,7 +386,7 @@ class SchoolBell(QMainWindow):
             self.config.save_preferences(self.config.preferences)
             self.load_data()
             self._retranslate_ui()
-            QMessageBox.information(self, "OK", self.tr("export_settings_done", "Settings exported successfully"))
+            QMessageBox.information(self, "OK", self.tr("import_settings_done", "Settings imported successfully"))
         except Exception as e:
             QMessageBox.critical(self, self.tr("error_title", "Error"), str(e))
 
@@ -822,7 +823,7 @@ class SchoolBell(QMainWindow):
         message = self.tr(message_key, fallback)
         message_changed = self.main_window_message != message
         self.main_window_message = message
-        if hasattr(self, "status_label"):
+        if hasattr(self, "statusLabel"):
             self.statusLabel.setText(f"⚠️ {message}")
         if message_changed:
             self.logger.log_event("warning", message)
@@ -915,7 +916,9 @@ class SchoolBell(QMainWindow):
         finally:
             # Снимаем блокировку после небольшой задержки
             # Это позволяет избежать мгновенного повторного захвата
-            QTimer.singleShot(100, lambda: setattr(self, '_playback_lock', False))
+            # Используем слабый захват self для предотвращения утечек памяти
+            self_ref = weakref.ref(self)
+            QTimer.singleShot(100, lambda: setattr(self_ref(), '_playback_lock', False) if self_ref() else None)
 
     def play_bell(self, bell_type, event_time):
         if not self.bells_enabled:
@@ -993,15 +996,24 @@ class SchoolBell(QMainWindow):
         now = datetime.datetime.now()
         today_key = WEEK_DAYS[now.weekday()]
 
+        # Проверяем, не праздник ли сегодня, до сброса состояния
+        today_date = now.date()
+        is_holiday = self.config.is_holiday(today_date)
+
         # Проверяем смену дня и сбрасываем кэш автоматических событий
-        self._reset_daily_state(today_key)
+        # Сброс происходит только если сегодня не праздник
+        if not is_holiday:
+            self._reset_daily_state(today_key)
 
         # Проверяем автоматический запуск гимна и разового объявления
+        # Даже в праздничные дни гимн и объявления могут воспроизводиться
         self.check_anthem(now)
         self.check_announcement(now)
 
         # Проверяем звонки и музыку по расписанию текущего календарного дня
-        self.check_schedule_bells(now)
+        # Только если сегодня не праздник
+        if not is_holiday:
+            self.check_schedule_bells(now)
 
     def check_schedule_bells(self, now):
         """Проверка звонков и музыки по расписанию реального текущего дня."""
@@ -1284,6 +1296,11 @@ class SchoolBell(QMainWindow):
             music_volume = volumes.get("music", 50)
             track = self.music_player.get_next_track()
             if track:
+                # Помечаем трек как сыгранный для кэша, чтобы избежать повторного запуска в окне PLAYBACK_TRIGGER_WINDOW_SECONDS
+                now = datetime.datetime.now()
+                cache_key = self._event_cache_key("music", now)
+                self.played_events[cache_key] = True
+                
                 self.sound_player.play_music(str(track), volume=music_volume)
                 self._clear_main_window_message()
                 self.music_player.mark_played()

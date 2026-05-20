@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build script for creating DEB package on Linux (Debian/Ubuntu)
 # This script creates a proper Debian package structure and builds the .deb file
+# Uses system Python packages - no PyInstaller needed
 
 set -e
 
@@ -23,11 +24,6 @@ check_requirements() {
     
     if ! command -v python3 &> /dev/null; then
         echo -e "${RED}❌ python3 is not installed${NC}"
-        missing=1
-    fi
-    
-    if ! command -v pyinstaller &> /dev/null; then
-        echo -e "${RED}❌ pyinstaller is not installed. Install with: pip install pyinstaller${NC}"
         missing=1
     fi
     
@@ -79,35 +75,19 @@ mkdir -p "$USR_DIR/share/applications"
 mkdir -p "$USR_DIR/share/icons/hicolor/256x256/apps"
 mkdir -p "$USR/bin"
 
-# Run PyInstaller to create the bundled application
-echo -e "${YELLOW}🔨 Running PyInstaller...${NC}"
-cd "$PROJECT_ROOT"
-pyinstaller --clean --noconfirm school_bell.spec || {
-    echo -e "${RED}❌ PyInstaller failed${NC}"
-    exit 1
-}
-
-# Copy PyInstaller output to lib directory
+# Copy source files to lib directory
 echo -e "${YELLOW}📁 Copying application files...${NC}"
-if [ -d "$PROJECT_ROOT/dist/school-bell" ]; then
-    cp -r "$PROJECT_ROOT/dist/school-bell/"* "$LIB_DIR/"
-elif [ -d "$PROJECT_ROOT/dist/SchoolBell" ]; then
-    cp -r "$PROJECT_ROOT/dist/SchoolBell/"* "$LIB_DIR/"
-else
-    echo -e "${RED}❌ PyInstaller output not found${NC}"
-    exit 1
-fi
-
-# Ensure sounds directory exists in the bundle
-if [ -d "$PROJECT_ROOT/sounds" ]; then
-    cp -r "$PROJECT_ROOT/sounds" "$LIB_DIR/sounds"
-fi
+cp "$PROJECT_ROOT/school_bell.py" "$LIB_DIR/"
+cp -r "$PROJECT_ROOT/src" "$LIB_DIR/"
+cp -r "$PROJECT_ROOT/sounds" "$LIB_DIR/"
+cp "$PROJECT_ROOT/schedule.yml" "$LIB_DIR/"
+cp "$PROJECT_ROOT/preferences.yml" "$LIB_DIR/"
 
 # Create launcher script in /usr/bin
 echo -e "${YELLOW}🚀 Creating launcher script...${NC}"
 cat > "$USR_DIR/bin/school-bell" << 'EOF'
 #!/bin/bash
-exec /usr/lib/school-bell/school-bell "$@"
+exec python3 /usr/lib/school-bell/school_bell.py "$@"
 EOF
 chmod 755 "$USR_DIR/bin/school-bell"
 
@@ -125,7 +105,12 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: $ARCH
-Depends: python3, libqt6core6, libqt6gui6, libqt6widgets6, libqt6multimedia6, libqt6multimediawidgets6
+Depends: python3,
+         python3-pyside6.qtcore,
+         python3-pyside6.qtgui,
+         python3-pyside6.qtwidgets,
+         python3-pyside6.qtmultimedia,
+         python3-yaml
 Maintainer: $MAINTAINER
 Description: $DESCRIPTION
  School Bell is an automation system for school bells with flexible scheduling and music during breaks.

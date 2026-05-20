@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# Version of the application
+VERSION = "1.0.0"
+
+# Handle PyInstaller frozen application paths
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    BASE_PATH = Path(sys._MEIPASS)
+else:
+    # Running as script
+    BASE_PATH = Path(__file__).resolve().parent.parent
+
+ROOT = BASE_PATH
 
 SCHEDULE_PATH = ROOT / "schedule.yml"
 PREFERENCES_FILE = ROOT / "preferences.yml"

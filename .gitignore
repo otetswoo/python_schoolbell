@@ -1,35 +1,42 @@
-```
+```gitignore
 # Compiled Python files
 *.pyc
 __pycache__/
 
-# Dependencies
-.venv/
+# Virtual environments
 venv/
-pip-log.txt
-pipenv.lock
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-
-# Environment variables
+.venv/
 .env
 .env.local
 *.env.*
 
-# Editors
+# Logs
+*.log
+
+# Editor/IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
 
-# Coverage reports
-.coverage
-coverage/
-htmlcov/
-
-# Distribution / packaging
+# Build/dist directories
 dist/
 build/
-*.egg-info/
+target/
+
+# Coverage reports
+coverage/
+htmlcov/
+*.coverage
+
+# Dependency cache
+.node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+Thumbs.db
 ```

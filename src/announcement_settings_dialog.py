@@ -4,7 +4,7 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
     QDateEdit, QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QGroupBox, QWidget
+    QHeaderView, QMessageBox, QGroupBox, QWidget, QRadioButton, QButtonGroup
 )
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
@@ -122,9 +122,24 @@ class AnnouncementSettingsDialog(QDialog):
             item_file.setToolTip(file_path)
             self.table.setItem(row, 2, item_file)
 
-            # Дата
+            # Дата с форматом "22 мая 2026"
             date_str = ann.get("date", "")
-            item_date = QTableWidgetItem(date_str)
+            display_date = date_str
+            if date_str:
+                try:
+                    # Пробуем распарсить дату в формате yyyy-MM-dd и отобразить в формате "22 мая 2026"
+                    parsed_date = datetime.date.fromisoformat(date_str)
+                    # Форматируем дату на русском языке
+                    month_names = {
+                        1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+                        5: "мая", 6: "июня", 7: "июля", 8: "августа",
+                        9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+                    }
+                    display_date = f"{parsed_date.day} {month_names[parsed_date.month]} {parsed_date.year}"
+                except (ValueError, KeyError):
+                    pass  # Оставляем как есть если не удалось распарсить
+            item_date = QTableWidgetItem(display_date)
+            item_date.setToolTip(date_str)  # В подсказке показываем оригинальный формат
             self.table.setItem(row, 3, item_date)
 
             # Время
@@ -201,11 +216,14 @@ class AnnouncementSettingsDialog(QDialog):
         dialog = AnnouncementEditDialog(self, entry=None)
         if dialog.exec() == QDialog.Accepted:
             data = dialog.get_data()
+            if not data:
+                return  # Пользователь отменил или нет файла
             if data.get("file"):
                 index = self.config.add_announcement(
                     data["file"],
                     data["date"],
-                    data["time"]
+                    data["time"],
+                    repeat_days=data.get("repeat_days", [])
                 )
                 self.config.save_preferences(self.config.preferences)
                 self.load_announcements()
@@ -223,6 +241,8 @@ class AnnouncementSettingsDialog(QDialog):
             dialog = AnnouncementEditDialog(self, entry=entry)
             if dialog.exec() == QDialog.Accepted:
                 data = dialog.get_data()
+                if not data:
+                    return  # Пользователь отменил или нет файла
                 self.config.update_announcement(row, **data)
                 self.config.save_preferences(self.config.preferences)
                 self.load_announcements()
@@ -280,17 +300,21 @@ class AnnouncementEditDialog(QDialog):
         
         layout.addWidget(file_group)
 
-        # Тип объявления (одноразовое/повторяющееся)
+        # Тип объявления (одноразовое/повторяющееся) - взаимоисключающие радиокнопки
         type_group = QGroupBox("Тип объявления")
         type_layout = QVBoxLayout()
         type_group.setLayout(type_layout)
         
-        self.one_time_radio = QCheckBox("Одноразовое (по дате)")
-        self.repeat_radio = QCheckBox("Повторяющееся (по дням недели)")
+        self.type_button_group = QButtonGroup(self)
+        self.one_time_radio = QRadioButton("Одноразовое (по дате)")
+        self.repeat_radio = QRadioButton("Повторяющееся (по дням недели)")
+        
+        self.type_button_group.addButton(self.one_time_radio)
+        self.type_button_group.addButton(self.repeat_radio)
         
         self.one_time_radio.setChecked(True)
-        self.one_time_radio.stateChanged.connect(self.on_type_changed)
-        self.repeat_radio.stateChanged.connect(self.on_type_changed)
+        self.one_time_radio.toggled.connect(self.on_type_changed)
+        self.repeat_radio.toggled.connect(self.on_type_changed)
         
         type_layout.addWidget(self.one_time_radio)
         type_layout.addWidget(self.repeat_radio)
@@ -312,14 +336,14 @@ class AnnouncementEditDialog(QDialog):
         
         layout.addWidget(self.days_group)
 
-        # Дата
+        # Дата с форматом "22 мая 2026"
         self.date_group = QGroupBox("Дата")
         date_layout = QHBoxLayout()
         self.date_group.setLayout(date_layout)
         
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
-        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+        self.date_edit.setDisplayFormat("d MMMM yyyy")  # Формат: "22 мая 2026"
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setMinimumDate(QDate.currentDate())
         date_layout.addWidget(self.date_edit)
@@ -413,7 +437,10 @@ class AnnouncementEditDialog(QDialog):
         
         date_str = self.entry.get("date", "")
         if date_str:
+            # Пробуем разные форматы даты для совместимости
             date = QDate.fromString(date_str, "yyyy-MM-dd")
+            if not date.isValid():
+                date = QDate.fromString(date_str, "d MMMM yyyy")
             if date.isValid():
                 self.date_edit.setDate(date)
         
@@ -440,10 +467,16 @@ class AnnouncementEditDialog(QDialog):
             self.file_label.setText(f"Файл: {path}")
 
     def get_data(self) -> dict:
-        """Возвращает данные из диалога."""
+        """Возвращает данные из диалога. Возвращает None если файл не выбран."""
         file_path = self.file_label.text().replace("Файл: ", "")
-        if file_path == "не выбран":
-            file_path = ""
+        if file_path == "не выбран" or not file_path:
+            # Показываем предупреждение, что файл не выбран
+            QMessageBox.warning(
+                self,
+                "Предупреждение",
+                "Необходимо выбрать аудиофайл для объявления."
+            )
+            return None
         
         # Определяем дни повторения
         repeat_days = []

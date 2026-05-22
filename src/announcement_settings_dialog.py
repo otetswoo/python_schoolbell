@@ -4,7 +4,7 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
     QDateEdit, QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QGroupBox
+    QHeaderView, QMessageBox, QGroupBox, QWidget
 )
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
@@ -13,31 +13,37 @@ import datetime
 
 from src.config_manager import ConfigManager
 from src.volume_control import VolumeControl
+from src.config import WEEK_DAYS, WEEK_DAYS_RU
 
 
 class AnnouncementSettingsDialog(QDialog):
     def __init__(self, parent, config_manager: ConfigManager):
         super().__init__(parent)
         self.setWindowTitle("📢 Объявления")
-        self.resize(620, 400)
+        self.resize(750, 450)
         self.config = config_manager
 
         layout = QVBoxLayout()
         self.setLayout(layout)
 
         info = QLabel(
-            "Настройка разовых объявлений.\n"
-            "Выберите аудиофайл, дату и время автоматического воспроизведения.\n"
-            "После запуска объявление будет отмечено как воспроизведенное."
+            "Настройка объявлений.\n"
+            "Выберите аудиофайл, дату/дни недели и время воспроизведения.\n"
+            "Объявления могут быть одноразовыми или повторяющимися."
         )
         info.setWordWrap(True)
         layout.addWidget(info)
 
         # Таблица объявлений
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Файл", "Дата", "Время", "Статус"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["Вкл", "Повтор", "Файл", "Дата", "Время", "Статус"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
@@ -77,28 +83,57 @@ class AnnouncementSettingsDialog(QDialog):
         self.table.setRowCount(len(announcements))
         
         today = datetime.date.today()
+        today_weekday = WEEK_DAYS[datetime.date.today().weekday()]
         
         for row, ann in enumerate(announcements):
+            # Чекбокс включения
+            enabled = ann.get("enabled", True)
+            checkbox = QCheckBox()
+            checkbox.setChecked(enabled)
+            checkbox.stateChanged.connect(lambda state, r=row: self.on_enabled_changed(r, state))
+            container = QWidget()
+            container_layout = QHBoxLayout(container)
+            container_layout.addWidget(checkbox)
+            container_layout.setAlignment(Qt.AlignCenter)
+            container_layout.setContentsMargins(0, 0, 0, 0)
+            self.table.setCellWidget(row, 0, container)
+
+            # Повторяющееся
+            repeat_days = ann.get("repeat_days", [])
+            if repeat_days:
+                # Преобразуем дни недели в русские названия
+                day_names = []
+                for day in repeat_days:
+                    if day in WEEK_DAYS:
+                        idx = WEEK_DAYS.index(day)
+                        day_names.append(WEEK_DAYS_RU[idx][:2])  # Первые две буквы
+                repeat_text = ", ".join(day_names)
+                repeat_item = QTableWidgetItem(repeat_text)
+                repeat_item.setToolTip(f"Повторяется: {', '.join(day_names)}")
+            else:
+                repeat_item = QTableWidgetItem("")
+                repeat_item.setToolTip("Одноразовое")
+            self.table.setItem(row, 1, repeat_item)
+
             # Файл
             file_path = ann.get("file", "")
             file_name = file_path.split("/")[-1] if file_path else "(не выбран)"
             item_file = QTableWidgetItem(file_name)
             item_file.setToolTip(file_path)
-            self.table.setItem(row, 0, item_file)
+            self.table.setItem(row, 2, item_file)
 
             # Дата
             date_str = ann.get("date", "")
             item_date = QTableWidgetItem(date_str)
-            self.table.setItem(row, 1, item_date)
+            self.table.setItem(row, 3, item_date)
 
             # Время
             time_str = ann.get("time", "")
             item_time = QTableWidgetItem(time_str)
-            self.table.setItem(row, 2, item_time)
+            self.table.setItem(row, 4, item_time)
 
             # Статус
             played = ann.get("played", False)
-            enabled = ann.get("enabled", True)
             
             if not enabled:
                 status_text = "⏸ Выкл"
@@ -110,7 +145,15 @@ class AnnouncementSettingsDialog(QDialog):
                 # Проверяем, не прошла ли дата
                 try:
                     ann_date = datetime.date.fromisoformat(date_str) if date_str else None
-                    if ann_date and ann_date < today:
+                    if repeat_days:
+                        # Для повторяющихся объявлений проверяем день недели
+                        if today_weekday not in repeat_days:
+                            status_text = "⏳ Ожидает (не сегодня)"
+                            color = QColor("#888888")
+                        else:
+                            status_text = "🔄 Повтор"
+                            color = QColor("#0066cc")
+                    elif ann_date and ann_date < today:
                         status_text = "⏳ Ожидает (дата прошла)"
                         color = QColor("#888888")
                     else:
@@ -122,12 +165,12 @@ class AnnouncementSettingsDialog(QDialog):
             
             item_status = QTableWidgetItem(status_text)
             item_status.setForeground(color)
-            self.table.setItem(row, 3, item_status)
+            self.table.setItem(row, 5, item_status)
 
             # Если played=True или дата в прошлом — делаем строку серой
             if played or not enabled:
                 self._set_row_gray(row)
-            elif date_str:
+            elif date_str and not repeat_days:
                 try:
                     ann_date = datetime.date.fromisoformat(date_str)
                     if ann_date < today:
@@ -142,6 +185,16 @@ class AnnouncementSettingsDialog(QDialog):
             item = self.table.item(row, col)
             if item:
                 item.setForeground(gray)
+
+    def on_enabled_changed(self, row, state):
+        """Обработчик изменения состояния чекбокса включения."""
+        announcements = self.config.get_announcements()
+        if 0 <= row < len(announcements):
+            enabled = (state != 0)
+            self.config.update_announcement(row, enabled=enabled)
+            self.config.save_preferences(self.config.preferences)
+            # Перезагружаем таблицу для обновления статуса
+            self.load_announcements()
 
     def on_add_clicked(self):
         """Открывает диалог добавления нового объявления."""
@@ -206,7 +259,7 @@ class AnnouncementEditDialog(QDialog):
         else:
             self.setWindowTitle("✏️ Редактирование объявления")
         
-        self.resize(450, 320)
+        self.resize(500, 420)
         self.entry = entry or {}
 
         layout = QVBoxLayout()
@@ -227,10 +280,42 @@ class AnnouncementEditDialog(QDialog):
         
         layout.addWidget(file_group)
 
+        # Тип объявления (одноразовое/повторяющееся)
+        type_group = QGroupBox("Тип объявления")
+        type_layout = QVBoxLayout()
+        type_group.setLayout(type_layout)
+        
+        self.one_time_radio = QCheckBox("Одноразовое (по дате)")
+        self.repeat_radio = QCheckBox("Повторяющееся (по дням недели)")
+        
+        self.one_time_radio.setChecked(True)
+        self.one_time_radio.stateChanged.connect(self.on_type_changed)
+        self.repeat_radio.stateChanged.connect(self.on_type_changed)
+        
+        type_layout.addWidget(self.one_time_radio)
+        type_layout.addWidget(self.repeat_radio)
+        layout.addWidget(type_group)
+
+        # Дни недели для повторения
+        self.days_group = QGroupBox("Дни недели для повторения")
+        days_layout = QVBoxLayout()
+        self.days_group.setLayout(days_layout)
+        self.days_group.setEnabled(False)
+        
+        self.day_checkboxes = {}
+        for i, day_ru in enumerate(WEEK_DAYS_RU):
+            day_key = WEEK_DAYS[i]
+            cb = QCheckBox(day_ru)
+            cb.setProperty("day_key", day_key)
+            days_layout.addWidget(cb)
+            self.day_checkboxes[day_key] = cb
+        
+        layout.addWidget(self.days_group)
+
         # Дата
-        date_group = QGroupBox("Дата")
+        self.date_group = QGroupBox("Дата")
         date_layout = QHBoxLayout()
-        date_group.setLayout(date_layout)
+        self.date_group.setLayout(date_layout)
         
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
@@ -240,7 +325,7 @@ class AnnouncementEditDialog(QDialog):
         date_layout.addWidget(self.date_edit)
         date_layout.addStretch()
         
-        layout.addWidget(date_group)
+        layout.addWidget(self.date_group)
 
         # Время
         time_group = QGroupBox("Время")
@@ -297,6 +382,12 @@ class AnnouncementEditDialog(QDialog):
     def config(self):
         return self.parent().config
 
+    def on_type_changed(self):
+        """Обработчик изменения типа объявления."""
+        is_repeat = self.repeat_radio.isChecked()
+        self.days_group.setEnabled(is_repeat)
+        self.date_group.setEnabled(not is_repeat)
+    
     def load_entry(self):
         """Загружает данные из entry в элементы управления."""
         if not self.entry:
@@ -305,6 +396,20 @@ class AnnouncementEditDialog(QDialog):
         file_path = self.entry.get("file", "")
         if file_path:
             self.file_label.setText(f"Файл: {file_path}")
+        
+        # Тип объявления
+        repeat_days = self.entry.get("repeat_days", [])
+        if repeat_days:
+            self.repeat_radio.setChecked(True)
+            self.one_time_radio.setChecked(False)
+            self.on_type_changed()
+            # Отмечаем дни недели
+            for day_key, cb in self.day_checkboxes.items():
+                cb.setChecked(day_key in repeat_days)
+        else:
+            self.one_time_radio.setChecked(True)
+            self.repeat_radio.setChecked(False)
+            self.on_type_changed()
         
         date_str = self.entry.get("date", "")
         if date_str:
@@ -340,11 +445,24 @@ class AnnouncementEditDialog(QDialog):
         if file_path == "не выбран":
             file_path = ""
         
+        # Определяем дни повторения
+        repeat_days = []
+        if self.repeat_radio.isChecked():
+            for day_key, cb in self.day_checkboxes.items():
+                if cb.isChecked():
+                    repeat_days.append(day_key)
+        
+        # Для повторяющихся объявлений дата не нужна (или можно оставить пустой)
+        date_str = ""
+        if self.one_time_radio.isChecked():
+            date_str = self.date_edit.date().toString("yyyy-MM-dd")
+        
         return {
             "file": file_path,
-            "date": self.date_edit.date().toString("yyyy-MM-dd"),
+            "date": date_str,
             "time": f"{self.hour_spin.value():02d}:{self.minute_spin.value():02d}",
             "enabled": self.active_checkbox.isChecked(),
             "volume": self.volume_control.value(),
+            "repeat_days": repeat_days,
         }
 

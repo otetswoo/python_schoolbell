@@ -106,10 +106,12 @@ class SoundPlayer(QObject):
 
     def is_playing(self, sound_type=None):
         """Проверяет, запущено ли сейчас воспроизведение указанного типа или любого звука."""
-        if not self.player or not self.current_type:
+        if not self.player:
             return False
-        # Всегда проверяем фактическое состояние плеера
-        if self.player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
+        actually_playing = (
+            self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+        )
+        if not actually_playing:
             return False
         if sound_type is None:
             return True

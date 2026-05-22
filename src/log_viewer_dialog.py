@@ -75,8 +75,11 @@ class LogViewerDialog(QDialog):
             return
 
         for event in events:
-            timestamp = event.get("timestamp", "")
-            level = event.get("level", "info")
-            message = event.get("message", "")
-            line = f"[{timestamp}] [{level.upper()}] {message}"
-            self.log_text.appendPlainText(line)
+            if isinstance(event, str):
+                self.log_text.appendPlainText(event)  # строка из файла — выводим как есть
+            elif isinstance(event, dict):
+                timestamp = event.get("timestamp", "")
+                level = event.get("level", "info")
+                message = event.get("message", "")
+                line = f"[{timestamp}] [{level.upper()}] {message}"
+                self.log_text.appendPlainText(line)

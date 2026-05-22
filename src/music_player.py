@@ -15,6 +15,7 @@ class MusicPlayer:
         self.sound_player = sound_player
         self.logger = logger
         self.is_music_playing_callback = None  # Callback для уведомления об окончании музыки
+        self._was_playing = False  # Флаг для отслеживания состояния воспроизведения
         
     @property
     def music_folder(self):
@@ -91,6 +92,10 @@ class MusicPlayer:
     
     def check_music_finished(self):
         """Проверяет, закончилась ли музыка, и уведомляет через callback."""
-        if self.sound_player and not self.sound_player.is_playing("music"):
+        is_playing = self.sound_player and self.sound_player.is_playing("music")
+        if self._was_playing and not is_playing:
+            self._was_playing = False
             if self.is_music_playing_callback:
                 self.is_music_playing_callback()
+        elif is_playing:
+            self._was_playing = True

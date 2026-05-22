@@ -4,15 +4,102 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
     QDateEdit, QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QGroupBox
+    QHeaderView, QMessageBox, QGroupBox, QListWidget, QListWidgetItem
 )
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, QDateTime
 from PySide6.QtGui import QColor
 
 import datetime
 
 from src.config_manager import ConfigManager
 from src.volume_control import VolumeControl
+
+
+class AnnouncementSelectDialog(QDialog):
+    """Диалог выбора активного объявления для ручного воспроизведения."""
+    
+    def __init__(self, parent, active_announcements, config: ConfigManager):
+        super().__init__(parent)
+        self.setWindowTitle("📢 Выбор объявления")
+        self.resize(500, 350)
+        self.config = config
+        self.active_announcements = active_announcements
+        self.selected_index = None
+        
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        
+        info = QLabel("Выберите объявление для воспроизведения:")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        # Список объявлений
+        self.list_widget = QListWidget()
+        self.list_widget.setSelectionMode(QListWidget.SingleSelection)
+        self.list_widget.setAlternatingRowColors(True)
+        layout.addWidget(self.list_widget)
+        
+        # Заполняем список
+        now = datetime.datetime.now()
+        for idx, ann in active_announcements:
+            file_name = ann.get("file", "").split("/")[-1] or "(не выбран)"
+            date_str = ann.get("date", "")
+            time_str = ann.get("time", "")
+            repeat_days = ann.get("repeat_days", [])
+            
+            # Вычисляем время до события
+            if date_str and time_str:
+                try:
+                    ann_datetime = datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                    delta = ann_datetime - now
+                    if delta.total_seconds() > 0:
+                        days = delta.days
+                        hours, remainder = divmod(int(delta.seconds), 3600)
+                        minutes, _ = divmod(remainder, 60)
+                        if days > 0:
+                            time_until = f"{days} дн. {hours} ч. {minutes} мин."
+                        elif hours > 0:
+                            time_until = f"{hours} ч. {minutes} мин."
+                        else:
+                            time_until = f"{minutes} мин."
+                    else:
+                        time_until = "Сейчас"
+                except ValueError:
+                    time_until = "?"
+            else:
+                time_until = "?"
+            
+            # Формируем описание повторения
+            if repeat_days:
+                repeat_text = f"Повтор: {', '.join(repeat_days)}"
+            else:
+                repeat_text = "Повтор: нет"
+            
+            item_text = f"{file_name}\n  Дата: {date_str or '—'}, Время: {time_str}, {repeat_text}\n  До события: {time_until}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, idx)
+            self.list_widget.addItem(item)
+        
+        # Кнопки
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        play_btn = QPushButton("▶️ Воспроизвести")
+        play_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(play_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def get_selected_index(self):
+        """Возвращает индекс выбранного объявления в общем списке announcements."""
+        current_item = self.list_widget.currentItem()
+        if current_item:
+            return current_item.data(Qt.UserRole)
+        return None
 
 
 class AnnouncementSettingsDialog(QDialog):
@@ -35,8 +122,8 @@ class AnnouncementSettingsDialog(QDialog):
 
         # Таблица объявлений
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Файл", "Дата", "Время", "Статус"])
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Файл", "Дата", "Время", "Повтор", "Статус"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -74,31 +161,79 @@ class AnnouncementSettingsDialog(QDialog):
     def load_announcements(self):
         """Загружает список объявлений в таблицу."""
         announcements = self.config.get_announcements()
-        self.table.setRowCount(len(announcements))
+        
+        # Сортируем объявления: сначала ближайшие по времени, затем более дальние
+        def sort_key(ann):
+            date_str = ann.get("date", "")
+            time_str = ann.get("time", "")
+            if date_str and time_str:
+                try:
+                    return datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                except ValueError:
+                    pass
+            return datetime.datetime.max
+        
+        sorted_announcements = sorted(enumerate(announcements), key=lambda x: sort_key(x[1]))
+        
+        self.table.setRowCount(len(sorted_announcements))
         
         today = datetime.date.today()
+        now = datetime.datetime.now()
         
-        for row, ann in enumerate(announcements):
+        for new_row, (orig_row, ann) in enumerate(sorted_announcements):
+            # Сохраняем оригинальный индекс в данных строки
+            self.table.setVerticalHeaderItem(new_row, QTableWidgetItem(str(orig_row)))
+            
             # Файл
             file_path = ann.get("file", "")
             file_name = file_path.split("/")[-1] if file_path else "(не выбран)"
             item_file = QTableWidgetItem(file_name)
             item_file.setToolTip(file_path)
-            self.table.setItem(row, 0, item_file)
+            self.table.setItem(new_row, 0, item_file)
 
             # Дата
             date_str = ann.get("date", "")
             item_date = QTableWidgetItem(date_str)
-            self.table.setItem(row, 1, item_date)
+            self.table.setItem(new_row, 1, item_date)
 
             # Время
             time_str = ann.get("time", "")
             item_time = QTableWidgetItem(time_str)
-            self.table.setItem(row, 2, item_time)
+            self.table.setItem(new_row, 2, item_time)
+            
+            # Повтор
+            repeat_days = ann.get("repeat_days", [])
+            if repeat_days:
+                repeat_text = ", ".join(repeat_days)
+            else:
+                repeat_text = "нет"
+            item_repeat = QTableWidgetItem(repeat_text)
+            self.table.setItem(new_row, 3, item_repeat)
 
-            # Статус
+            # Статус и время до события
             played = ann.get("played", False)
             enabled = ann.get("enabled", True)
+            
+            # Вычисляем время до события
+            time_until = ""
+            if date_str and time_str:
+                try:
+                    ann_datetime = datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                    delta = ann_datetime - now
+                    if delta.total_seconds() > 0:
+                        days = delta.days
+                        hours, remainder = divmod(int(delta.seconds), 3600)
+                        minutes, _ = divmod(remainder, 60)
+                        if days > 0:
+                            time_until = f"{days} дн. {hours} ч."
+                        elif hours > 0:
+                            time_until = f"{hours} ч. {minutes} мин."
+                        else:
+                            time_until = f"{minutes} мин."
+                    else:
+                        time_until = "Сейчас"
+                except ValueError:
+                    time_until = "?"
             
             if not enabled:
                 status_text = "⏸ Выкл"
@@ -111,10 +246,10 @@ class AnnouncementSettingsDialog(QDialog):
                 try:
                     ann_date = datetime.date.fromisoformat(date_str) if date_str else None
                     if ann_date and ann_date < today:
-                        status_text = "⏳ Ожидает (дата прошла)"
+                        status_text = f"⏳ Ожидает (дата прошла)\n{time_until}"
                         color = QColor("#888888")
                     else:
-                        status_text = "⏳ Ожидает"
+                        status_text = f"⏳ Ожидает\n{time_until}" if time_until else "⏳ Ожидает"
                         color = QColor("#000000")
                 except ValueError:
                     status_text = "⏳ Ожидает"
@@ -122,16 +257,16 @@ class AnnouncementSettingsDialog(QDialog):
             
             item_status = QTableWidgetItem(status_text)
             item_status.setForeground(color)
-            self.table.setItem(row, 3, item_status)
+            self.table.setItem(new_row, 4, item_status)
 
             # Если played=True или дата в прошлом — делаем строку серой
             if played or not enabled:
-                self._set_row_gray(row)
+                self._set_row_gray(new_row)
             elif date_str:
                 try:
                     ann_date = datetime.date.fromisoformat(date_str)
                     if ann_date < today:
-                        self._set_row_gray(row)
+                        self._set_row_gray(new_row)
                 except ValueError:
                     pass
 
@@ -164,13 +299,20 @@ class AnnouncementSettingsDialog(QDialog):
         if row < 0:
             return
         
+        # Получаем оригинальный индекс из вертикального заголовка
+        header_item = self.table.verticalHeaderItem(row)
+        if header_item:
+            orig_row = int(header_item.text())
+        else:
+            orig_row = row
+        
         announcements = self.config.get_announcements()
-        if 0 <= row < len(announcements):
-            entry = announcements[row].copy()
+        if 0 <= orig_row < len(announcements):
+            entry = announcements[orig_row].copy()
             dialog = AnnouncementEditDialog(self, entry=entry)
             if dialog.exec() == QDialog.Accepted:
                 data = dialog.get_data()
-                self.config.update_announcement(row, **data)
+                self.config.update_announcement(orig_row, **data)
                 self.config.save_preferences(self.config.preferences)
                 self.load_announcements()
 
@@ -180,16 +322,23 @@ class AnnouncementSettingsDialog(QDialog):
         if row < 0:
             return
         
+        # Получаем оригинальный индекс из вертикального заголовка
+        header_item = self.table.verticalHeaderItem(row)
+        if header_item:
+            orig_row = int(header_item.text())
+        else:
+            orig_row = row
+        
         announcements = self.config.get_announcements()
-        if 0 <= row < len(announcements):
+        if 0 <= orig_row < len(announcements):
             reply = QMessageBox.question(
                 self,
                 "Подтверждение удаления",
-                f"Удалить объявление '{announcements[row].get('file', '').split('/')[-1]}'?",
+                f"Удалить объявление '{announcements[orig_row].get('file', '').split('/')[-1]}'?",
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
-                self.config.delete_announcement(row)
+                self.config.delete_announcement(orig_row)
                 self.config.save_preferences(self.config.preferences)
                 self.load_announcements()
 

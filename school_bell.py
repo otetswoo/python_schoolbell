@@ -1451,23 +1451,34 @@ class SchoolBell(QMainWindow):
             self.logger.log_event("error", f"Error checking anthem: {e}")
 
     def manual_announcement(self):
-        announcement_settings = self.config.get_announcement_settings()
-        announcement_path = self._resolve_existing_file(announcement_settings.get("file", ""))
-        if not announcement_path:
+        """Открывает диалог выбора активных объявлений для ручного воспроизведения."""
+        from src.announcement_settings_dialog import AnnouncementSelectDialog
+        
+        active_announcements = self.config.get_active_announcements()
+        if not active_announcements:
             self._set_main_window_message(
-                "missing_announcement_file",
-                "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+                "no_active_announcements",
+                "Нет активных объявлений для воспроизведения.",
             )
             return
-
-        self.sound_player.stop_all()
-        announcement_volume = self.config.get_volume("announcement")
-        if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
-            self._clear_main_window_message()
-            self.statusLabel.setText(
-                f"📢 {self.tr('btn_announcement').replace('📢', '').strip()}!"
-            )
-            self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
+        
+        dialog = AnnouncementSelectDialog(self, active_announcements, self.config)
+        if dialog.exec() == QDialog.Accepted:
+            selected_index = dialog.get_selected_index()
+            if selected_index is not None:
+                announcements = self.config.get_announcements()
+                if 0 <= selected_index < len(announcements):
+                    ann = announcements[selected_index]
+                    announcement_path = self._resolve_existing_file(ann.get("file", ""))
+                    if announcement_path:
+                        self.sound_player.stop_all()
+                        announcement_volume = self.config.get_volume("announcement")
+                        if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
+                            self._clear_main_window_message()
+                            self.statusLabel.setText(
+                                f"📢 {self.tr('btn_announcement').replace('📢', '').strip()}!"
+                            )
+                            self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
 
     def check_announcement(self, now):
         """Проверяет, нужно ли автоматически запустить объявления (одноразовые и повторяющиеся)."""

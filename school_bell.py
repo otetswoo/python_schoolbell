@@ -33,12 +33,103 @@ from src.event_logger import EventLogger
 from src.volume_control import VolumeControl
 
 # Версия приложения
-APP_VERSION = "2.0.0"
+from src.config import VERSION as APP_VERSION
 
 COLOR_CURRENT_LIGHT = QColor("#c8e6c9")
 COLOR_SOON_LIGHT = QColor("#fff9c4")
 COLOR_NORMAL_LIGHT = QColor("#ffffff")
 PLAYBACK_TRIGGER_WINDOW_SECONDS = 60
+
+
+class AnnouncementSelectDialog(QDialog):
+    """Диалог выбора объявления для экстренного запуска."""
+    
+    def __init__(self, parent, active_announcements):
+        """
+        Args:
+            parent: родительское окно
+            active_announcements: список кортежей (index, announcement_dict)
+        """
+        super().__init__(parent)
+        self.setWindowTitle("📢 Выберите объявление")
+        self.resize(500, 350)
+        self.selected_index = None
+        
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        
+        info = QLabel("Выберите объявление для воспроизведения:")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        # Список объявлений
+        self.list_widget = QListWidget()
+        self.list_widget.setSelectionMode(QListWidget.SingleSelection)
+        
+        for idx, ann in active_announcements:
+            file_path = ann.get("file", "")
+            file_name = file_path.split("/")[-1] if file_path else "(не выбран)"
+            
+            # Формируем описание
+            repeat_days = ann.get("repeat_days", [])
+            date_str = ann.get("date", "")
+            time_str = ann.get("time", "")
+            
+            if repeat_days:
+                # Преобразуем дни недели в русские названия
+                day_names = []
+                for day in repeat_days:
+                    if day in WEEK_DAYS:
+                        day_idx = WEEK_DAYS.index(day)
+                        day_names.append(WEEK_DAYS_RU[day_idx])
+                type_text = f"🔄 Повторяется: {', '.join(day_names)}"
+            elif date_str:
+                type_text = f"📅 Одноразовое ({date_str})"
+            else:
+                type_text = "❓ Неизвестный тип"
+            
+            item_text = f"{file_name}\n   {type_text}, время: {time_str}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, idx)  # Сохраняем индекс объявления
+            self.list_widget.addItem(item)
+        
+        self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
+        layout.addWidget(self.list_widget)
+        
+        # Кнопки
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        ok_btn = QPushButton("OK")
+        ok_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(ok_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        # Выделяем первый элемент
+        if self.list_widget.count() > 0:
+            self.list_widget.setCurrentRow(0)
+    
+    def on_item_double_clicked(self, item):
+        """Обработчик двойного клика по элементу списка."""
+        self.selected_index = item.data(Qt.UserRole)
+        self.accept()
+    
+    def get_selected_index(self):
+        """Возвращает индекс выбранного объявления."""
+        if self.selected_index is not None:
+            return self.selected_index
+        
+        # Если не было двойного клика, берем выделенный элемент
+        current_item = self.list_widget.currentItem()
+        if current_item:
+            return current_item.data(Qt.UserRole)
+        
+        return None
 
 
 class SchoolBell(QMainWindow):
@@ -84,8 +175,8 @@ class SchoolBell(QMainWindow):
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_enabled = anthem_settings.get("enabled", False)
 
-        announcement_settings = self.config.get_announcement_settings()
-        self.announcement_enabled = announcement_settings.get("enabled", False)
+        active = self.config.get_active_announcements()
+        self.announcement_enabled = len(active) > 0
 
         # Настройки системного трея
         self.tray_icon = None
@@ -276,8 +367,8 @@ class SchoolBell(QMainWindow):
         self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
         
-        announcement_settings = self.config.get_announcement_settings()
-        self.announcement_checkbox.setChecked(announcement_settings.get("enabled", False))
+        active = self.config.get_active_announcements()
+        self.announcement_checkbox.setChecked(len(active) > 0)
         self.announcement_checkbox.stateChanged.connect(self.on_announcement_toggled)
 
         # Создаем контролы громкости
@@ -496,7 +587,7 @@ class SchoolBell(QMainWindow):
 
     def show_about(self):
         """Показать диалог 'О программе'"""
-        about_text = self.tr("about_text").replace("<b>Версия:</b> 1.0", f"<b>Версия:</b> {APP_VERSION}")
+        about_text = self.tr("about_text").format(version=APP_VERSION)
         QMessageBox.about(self, self.tr("about_title"), about_text)
 
     def show_templates_editor(self):
@@ -815,29 +906,32 @@ class SchoolBell(QMainWindow):
         color_soon = COLOR_SOON_LIGHT
         color_normal = COLOR_NORMAL_LIGHT
         
-        last_ended_row = None  # Для отслеживания последнего завершившегося урока
+        # Найти индекс последнего завершившегося урока
+        last_ended_row = None
+        for r in range(rows):
+            try:
+                end_str = self.scheduleTable.item(r, 1).text()
+                end = datetime.datetime.combine(today, self._parse_time(end_str))
+                if end < now:
+                    last_ended_row = r
+            except:
+                continue
 
         for r in range(rows):
             try:
                 start_str = self.scheduleTable.item(r, 0).text()
                 end_str = self.scheduleTable.item(r, 1).text()
-
                 start = datetime.datetime.combine(today, self._parse_time(start_str))
                 end = datetime.datetime.combine(today, self._parse_time(end_str))
 
-                bg = color_normal
                 if start <= now <= end:
-                    # Текущий урок - выделяем зеленым цветом
                     bg = color_current
-                elif end < now:
-                    # Урок уже закончился
-                    last_ended_row = r
-                    if is_break:
-                        # Если сейчас перемена, подсвечиваем последний завершившийся урок желтым
-                        bg = color_soon
+                elif is_break and r == last_ended_row:
+                    bg = color_soon  # только последний завершившийся
                 elif 0 <= (start - now).total_seconds() <= 120:
-                    # Скоро начнется - подсвечиваем желтым
                     bg = color_soon
+                else:
+                    bg = color_normal
 
                 # Применяем цвет ко всем ячейкам строки (включая столбец с переменой)
                 for c in range(3):
@@ -928,6 +1022,16 @@ class SchoolBell(QMainWindow):
         self.music_player.reset_daily()
         self.current_playing_track = None
         self.last_day = day_key
+        
+        # Сбрасываем played для повторяющихся объявлений
+        changed = False
+        for ann in self.config.get_announcements():
+            if ann.get("repeat_days") and ann.get("played", False):
+                ann["played"] = False
+                ann["enabled"] = True
+                changed = True
+        if changed:
+            self.config.save_preferences(self.config.preferences)
 
     def _play_cached_audio(self, event_type, event_time, path, volume, status_text=None, log_message=None):
         """Проигрывает событие один раз в минутном окне и помечает его в кэше.
@@ -1751,93 +1855,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-class AnnouncementSelectDialog(QDialog):
-    """Диалог выбора объявления для экстренного запуска."""
-    
-    def __init__(self, parent, active_announcements):
-        """
-        Args:
-            parent: родительское окно
-            active_announcements: список кортежей (index, announcement_dict)
-        """
-        super().__init__(parent)
-        self.setWindowTitle("📢 Выберите объявление")
-        self.resize(500, 350)
-        self.selected_index = None
-        
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-        
-        info = QLabel("Выберите объявление для воспроизведения:")
-        info.setWordWrap(True)
-        layout.addWidget(info)
-        
-        # Список объявлений
-        self.list_widget = QListWidget()
-        self.list_widget.setSelectionMode(QListWidget.SingleSelection)
-        
-        for idx, ann in active_announcements:
-            file_path = ann.get("file", "")
-            file_name = file_path.split("/")[-1] if file_path else "(не выбран)"
-            
-            # Формируем описание
-            repeat_days = ann.get("repeat_days", [])
-            date_str = ann.get("date", "")
-            time_str = ann.get("time", "")
-            
-            if repeat_days:
-                # Преобразуем дни недели в русские названия
-                day_names = []
-                for day in repeat_days:
-                    if day in WEEK_DAYS:
-                        day_idx = WEEK_DAYS.index(day)
-                        day_names.append(WEEK_DAYS_RU[day_idx])
-                type_text = f"🔄 Повторяется: {', '.join(day_names)}"
-            elif date_str:
-                type_text = f"📅 Одноразовое ({date_str})"
-            else:
-                type_text = "❓ Неизвестный тип"
-            
-            item_text = f"{file_name}\n   {type_text}, время: {time_str}"
-            item = QListWidgetItem(item_text)
-            item.setData(Qt.UserRole, idx)  # Сохраняем индекс объявления
-            self.list_widget.addItem(item)
-        
-        self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
-        layout.addWidget(self.list_widget)
-        
-        # Кнопки
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton("Отмена")
-        cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        ok_btn = QPushButton("OK")
-        ok_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(ok_btn)
-        
-        layout.addLayout(btn_layout)
-        
-        # Выделяем первый элемент
-        if self.list_widget.count() > 0:
-            self.list_widget.setCurrentRow(0)
-    
-    def on_item_double_clicked(self, item):
-        """Обработчик двойного клика по элементу списка."""
-        self.selected_index = item.data(Qt.UserRole)
-        self.accept()
-    
-    def get_selected_index(self):
-        """Возвращает индекс выбранного объявления."""
-        if self.selected_index is not None:
-            return self.selected_index
-        
-        # Если не было двойного клика, берем выделенный элемент
-        current_item = self.list_widget.currentItem()
-        if current_item:
-            return current_item.data(Qt.UserRole)
-        
-        return None

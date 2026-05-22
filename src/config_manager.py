@@ -47,8 +47,10 @@ class ConfigManager:
                 
                 # Миграция старого формата объявлений в новый
                 old = self.preferences.get("announcement")
-                if old and isinstance(old, dict):
-                    # Старый формат — мигрируем в список
+                has_new = "announcements" in self.preferences and self.preferences["announcements"]
+
+                if old and isinstance(old, dict) and not has_new:
+                    # мигрируем только если новый список пустой или отсутствует
                     if old.get("file"):
                         self.preferences["announcements"] = [
                             {**old, "enabled": not old.get("played", False)}
@@ -58,6 +60,9 @@ class ConfigManager:
                     del self.preferences["announcement"]
                 elif "announcements" not in self.preferences:
                     self.preferences["announcements"] = []
+                # Удаляем старый ключ если он есть и новый уже есть
+                if "announcement" in self.preferences and "announcements" in self.preferences:
+                    del self.preferences["announcement"]
                 
                 return True
             except Exception as e:
@@ -212,7 +217,8 @@ class ConfigManager:
         announcements = self.preferences.get("announcements", [])
         if 0 <= index < len(announcements):
             announcements[index]["played"] = bool(played)
-            if played:
+            # Отключаем enabled ТОЛЬКО для одноразовых объявлений
+            if played and not announcements[index].get("repeat_days"):
                 announcements[index]["enabled"] = False
 
     def get_active_announcements(self, now=None) -> list:

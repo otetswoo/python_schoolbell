@@ -1,21 +1,20 @@
 ```python
-# Compiled Python files
+# Compiled and build artifacts
 *.pyc
 __pycache__/
+*.o
+*.obj
 
-# Virtual environments
-venv/
+# Dependencies
 .venv/
-env/
+venv/
 
-# Logs
+# Logs and temp files
 *.log
-
-# Temporary files
 *.tmp
 *.swp
 
-# Environment files
+# Environment
 .env
 .env.local
 *.env.*
@@ -29,7 +28,7 @@ env/
 coverage/
 htmlcov/
 
-# Testing
-.pytest_cache/
+# Python cache
 .mypy_cache/
+.pytest_cache/
 ```

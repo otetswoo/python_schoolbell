@@ -32,6 +32,8 @@ from src.gui.localization import LOCALIZATION
 from src.event_logger import EventLogger
 from src.volume_control import VolumeControl
 
+# Версия приложения
+APP_VERSION = "2.0.0"
 
 COLOR_CURRENT_LIGHT = QColor("#c8e6c9")
 COLOR_SOON_LIGHT = QColor("#fff9c4")
@@ -494,8 +496,8 @@ class SchoolBell(QMainWindow):
 
     def show_about(self):
         """Показать диалог 'О программе'"""
-        QMessageBox.about(self, self.tr("about_title"),
-                          self.tr("about_text"))
+        about_text = self.tr("about_text").replace("<b>Версия:</b> 1.0", f"<b>Версия:</b> {APP_VERSION}")
+        QMessageBox.about(self, self.tr("about_title"), about_text)
 
     def show_templates_editor(self):
         """Открыть диалог редактирования шаблонов расписания"""

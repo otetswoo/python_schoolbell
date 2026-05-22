@@ -1293,19 +1293,29 @@ class SchoolBell(QMainWindow):
 
     def on_announcement_toggled(self, state):
         self.announcement_enabled = (state != 0)
-        announcement_settings = self.config.get_announcement_settings()
-        announcement_settings["enabled"] = self.announcement_enabled
+        
+        # При включении сбрасываем played=False только для объявлений с датой >= сегодня
         if self.announcement_enabled:
-            announcement_settings["played"] = False
-        self.config.preferences["announcement"] = announcement_settings
+            today = datetime.date.today().isoformat()
+            for index, ann in enumerate(self.config.get_announcements()):
+                ann_date = ann.get("date", "")
+                if ann_date and ann_date >= today:
+                    self.config.update_announcement(index, played=False)
+        
         self.config.save_preferences(self.config.preferences)
-        if self.announcement_enabled:
-            announcement_path = self._resolve_existing_file(announcement_settings.get("file", ""))
-            if not announcement_path:
-                self._set_main_window_message(
-                    "missing_announcement_file",
-                    "Файл объявления не выбран или не найден. Выберите файл в настройках.",
-                )
+        
+        # Обновляем UI состояние
+        self._update_announcement_ui_state()
+
+    def _update_announcement_ui_state(self):
+        """Обновляет состояние чекбокса и кнопки объявления."""
+        # Проверяем наличие активных объявлений
+        active_announcements = self.config.get_active_announcements()
+        has_active = len(active_announcements) > 0
+        
+        # Устанавливаем флаг announcement_enabled если есть активные объявления
+        self.announcement_enabled = has_active
+        self.announcement_checkbox.setChecked(has_active)
         self.announcement_btn.setText(self._get_announcement_button_text())
 
     def manual_bell(self):
@@ -1460,55 +1470,56 @@ class SchoolBell(QMainWindow):
         if not self.announcement_enabled:
             return
 
-        announcement_settings = self.config.get_announcement_settings()
-        if announcement_settings.get("played", False):
-            return
+        for index, ann in enumerate(self.config.get_announcements()):
+            if not ann.get("enabled", True):
+                continue
+            if ann.get("played", False):
+                continue
 
-        announcement_path = self._resolve_existing_file(announcement_settings.get("file", ""))
-        date_str = announcement_settings.get("date", "")
-        time_str = announcement_settings.get("time", "")
+            announcement_path = self._resolve_existing_file(ann.get("file", ""))
+            date_str = ann.get("date", "")
+            time_str = ann.get("time", "")
 
-        if not announcement_path:
-            self._set_main_window_message(
-                "missing_announcement_file",
-                "Файл объявления не выбран или не найден. Выберите файл в настройках.",
-            )
-            return
-        if not date_str or not time_str:
-            self._set_main_window_message(
-                "missing_announcement_schedule",
-                "Дата или время объявления не заданы. Проверьте настройки объявления.",
-            )
-            return
+            if not announcement_path:
+                self._set_main_window_message(
+                    "missing_announcement_file",
+                    "Файл объявления не выбран или не найден. Выберите файл в настройках.",
+                )
+                continue
+            if not date_str or not time_str:
+                self._set_main_window_message(
+                    "missing_announcement_schedule",
+                    "Дата или время объявления не заданы. Проверьте настройки объявления.",
+                )
+                continue
 
-        try:
-            announcement_date = datetime.date.fromisoformat(date_str)
-            if now.date() != announcement_date:
-                return
+            try:
+                announcement_date = datetime.date.fromisoformat(date_str)
+                if now.date() != announcement_date:
+                    continue
 
-            announcement_clock = self._parse_time(time_str)
-            announcement_time = now.replace(
-                hour=announcement_clock.hour,
-                minute=announcement_clock.minute,
-                second=announcement_clock.second,
-                microsecond=0,
-            )
+                announcement_clock = self._parse_time(time_str)
+                announcement_time = now.replace(
+                    hour=announcement_clock.hour,
+                    minute=announcement_clock.minute,
+                    second=announcement_clock.second,
+                    microsecond=0,
+                )
 
-            if self._is_time_to_play(now, announcement_time) and self._play_cached_audio(
-                "announcement",
-                announcement_time,
-                announcement_path,
-                self.config.get_volume("announcement"),
-                status_text="📢 Объявление!",
-                log_message=f"Announcement played: {announcement_path.name}",
-            ):
-                self.config.set_announcement_played(True)
-                self.config.save_preferences(self.config.preferences)
-                self.announcement_enabled = False
-                self.announcement_checkbox.setChecked(False)
-                self.announcement_btn.setText(self._get_announcement_button_text())
-        except Exception as e:
-            self.logger.log_event("error", f"Error checking announcement: {e}")
+                if self._is_time_to_play(now, announcement_time) and self._play_cached_audio(
+                    "announcement",
+                    announcement_time,
+                    announcement_path,
+                    self.config.get_volume("announcement"),
+                    status_text="📢 Объявление!",
+                    log_message=f"Announcement played: {announcement_path.name}",
+                ):
+                    self.config.set_announcement_played_by_index(index, True)
+                    self.config.save_preferences(self.config.preferences)
+                    # Обновляем состояние чекбокса и кнопки
+                    self._update_announcement_ui_state()
+            except Exception as e:
+                self.logger.log_event("error", f"Error checking announcement: {e}")
 
     def _get_announcement_button_text(self):
         """Возвращает текст кнопки объявления в зависимости от состояния."""

@@ -44,10 +44,25 @@ class ConfigManager:
             try:
                 with open(PREFERENCES_FILE, "r", encoding="utf-8") as f:
                     self.preferences = yaml.safe_load(f) or {}
+                
+                # Миграция старого формата объявлений в новый
+                old = self.preferences.get("announcement")
+                if old and isinstance(old, dict):
+                    # Старый формат — мигрируем в список
+                    if old.get("file"):
+                        self.preferences["announcements"] = [
+                            {**old, "enabled": not old.get("played", False)}
+                        ]
+                    else:
+                        self.preferences["announcements"] = []
+                    del self.preferences["announcement"]
+                elif "announcements" not in self.preferences:
+                    self.preferences["announcements"] = []
+                
                 return True
-            except Exception:
-                pass
-        self.preferences = {}
+            except Exception as e:
+                print(f"Error loading preferences: {e}")
+        self.preferences = {"announcements": []}
         return False
 
     def save_preferences(self, prefs):
@@ -150,6 +165,59 @@ class ConfigManager:
         self.preferences["announcement"]["played"] = bool(played)
         if played:
             self.preferences["announcement"]["enabled"] = False
+
+    # Новые методы для работы со списком объявлений (multiple announcements)
+    def get_announcements(self) -> list:
+        """Возвращает список всех объявлений."""
+        return self.preferences.get("announcements", [])
+
+    def add_announcement(self, file, date, time) -> int:
+        """Добавляет новое объявление. Возвращает индекс добавленного объявления."""
+        if "announcements" not in self.preferences:
+            self.preferences["announcements"] = []
+        entry = {
+            "file": file,
+            "date": date,
+            "time": time,
+            "played": False,
+            "enabled": True
+        }
+        self.preferences["announcements"].append(entry)
+        return len(self.preferences["announcements"]) - 1
+
+    def update_announcement(self, index, **kwargs):
+        """Обновляет поля указанного объявления."""
+        announcements = self.preferences.get("announcements", [])
+        if 0 <= index < len(announcements):
+            for key, value in kwargs.items():
+                announcements[index][key] = value
+
+    def delete_announcement(self, index):
+        """Удаляет объявление по индексу."""
+        announcements = self.preferences.get("announcements", [])
+        if 0 <= index < len(announcements):
+            del self.preferences["announcements"][index]
+
+    def set_announcement_played_by_index(self, index, played: bool):
+        """Устанавливает статус played для объявления по индексу."""
+        announcements = self.preferences.get("announcements", [])
+        if 0 <= index < len(announcements):
+            announcements[index]["played"] = bool(played)
+            if played:
+                announcements[index]["enabled"] = False
+
+    def get_active_announcements(self) -> list:
+        """Возвращает список активных объявлений (enabled=True, played=False)."""
+        import datetime
+        today = datetime.date.today().isoformat()
+        active = []
+        for ann in self.preferences.get("announcements", []):
+            if ann.get("enabled", True) and not ann.get("played", False):
+                # Проверяем, что дата >= сегодня
+                ann_date = ann.get("date", "")
+                if ann_date and ann_date >= today:
+                    active.append(ann)
+        return active
 
     def get_locale(self):
         return self.preferences.get("locale", "ru")

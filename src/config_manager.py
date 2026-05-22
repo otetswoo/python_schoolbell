@@ -7,7 +7,7 @@ import datetime
 
 import yaml
 
-from src.config import DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE
+from src.config import DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE, WEEK_DAYS
 
 
 class ConfigManager:
@@ -171,8 +171,16 @@ class ConfigManager:
         """Возвращает список всех объявлений."""
         return self.preferences.get("announcements", [])
 
-    def add_announcement(self, file, date, time) -> int:
-        """Добавляет новое объявление. Возвращает индекс добавленного объявления."""
+    def add_announcement(self, file, date, time, repeat_days=None) -> int:
+        """Добавляет новое объявление. Возвращает индекс добавленного объявления.
+        
+        Args:
+            file: путь к файлу
+            date: дата (строка YYYY-MM-DD или 'daily' для ежедневного повторения)
+            time: время (строка HH:MM)
+            repeat_days: список дней недели для повторения (например ['monday', 'wednesday', 'friday'])
+                        или None для одноразового объявления
+        """
         if "announcements" not in self.preferences:
             self.preferences["announcements"] = []
         entry = {
@@ -180,7 +188,8 @@ class ConfigManager:
             "date": date,
             "time": time,
             "played": False,
-            "enabled": True
+            "enabled": True,
+            "repeat_days": repeat_days or []  # Список дней недели для повторения
         }
         self.preferences["announcements"].append(entry)
         return len(self.preferences["announcements"]) - 1
@@ -206,17 +215,48 @@ class ConfigManager:
             if played:
                 announcements[index]["enabled"] = False
 
-    def get_active_announcements(self) -> list:
-        """Возвращает список активных объявлений (enabled=True, played=False)."""
+    def get_active_announcements(self, now=None) -> list:
+        """Возвращает список активных объявлений (enabled=True, played=False).
+        
+        Args:
+            now: datetime объект текущего времени (по умолчанию - сейчас)
+        
+        Returns:
+            Список кортежей (index, announcement_dict) для активных объявлений
+        """
         import datetime
-        today = datetime.date.today().isoformat()
+        if now is None:
+            now = datetime.datetime.now()
+        
+        today = now.date().isoformat()
+        today_weekday = WEEK_DAYS[now.weekday()]  # например 'monday'
+        
         active = []
-        for ann in self.preferences.get("announcements", []):
-            if ann.get("enabled", True) and not ann.get("played", False):
-                # Проверяем, что дата >= сегодня
-                ann_date = ann.get("date", "")
-                if ann_date and ann_date >= today:
-                    active.append(ann)
+        for idx, ann in enumerate(self.preferences.get("announcements", [])):
+            if not ann.get("enabled", True):
+                continue
+            if ann.get("played", False):
+                continue
+            
+            ann_date = ann.get("date", "")
+            repeat_days = ann.get("repeat_days", [])
+            
+            # Если есть repeat_days, проверяем день недели
+            if repeat_days:
+                if today_weekday not in repeat_days:
+                    continue
+                # Для повторяющихся объявлений дата может быть любой
+                # или отсутствовать (ежедневное повторение)
+            elif ann_date:
+                # Одноразовое объявление - проверяем дату
+                if ann_date < today:
+                    continue
+            else:
+                # Нет ни repeat_days, ни даты - пропускаем
+                continue
+            
+            active.append((idx, ann))
+        
         return active
 
     def get_locale(self):

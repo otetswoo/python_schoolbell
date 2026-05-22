@@ -1295,12 +1295,16 @@ class SchoolBell(QMainWindow):
         self.announcement_enabled = (state != 0)
         
         # При включении сбрасываем played=False только для объявлений с датой >= сегодня
+        # или для повторяющихся объявлений
         if self.announcement_enabled:
             today = datetime.date.today().isoformat()
             for index, ann in enumerate(self.config.get_announcements()):
                 ann_date = ann.get("date", "")
-                if ann_date and ann_date >= today:
-                    self.config.update_announcement(index, played=False)
+                repeat_days = ann.get("repeat_days", [])
+                
+                # Для повторяющихся объявлений или объявлений с датой >= сегодня
+                if repeat_days or (ann_date and ann_date >= today):
+                    self.config.update_announcement(index, played=False, enabled=True)
         
         self.config.save_preferences(self.config.preferences)
         
@@ -1466,7 +1470,7 @@ class SchoolBell(QMainWindow):
             self.logger.log_event("announcement", f"Manual announcement: {announcement_path.name}")
 
     def check_announcement(self, now):
-        """Проверяет, нужно ли автоматически запустить разовое объявление."""
+        """Проверяет, нужно ли автоматически запустить объявления (одноразовые и повторяющиеся)."""
         if not self.announcement_enabled:
             return
 
@@ -1479,6 +1483,7 @@ class SchoolBell(QMainWindow):
             announcement_path = self._resolve_existing_file(ann.get("file", ""))
             date_str = ann.get("date", "")
             time_str = ann.get("time", "")
+            repeat_days = ann.get("repeat_days", [])
 
             if not announcement_path:
                 self._set_main_window_message(
@@ -1486,18 +1491,33 @@ class SchoolBell(QMainWindow):
                     "Файл объявления не выбран или не найден. Выберите файл в настройках.",
                 )
                 continue
-            if not date_str or not time_str:
+            if not time_str:
                 self._set_main_window_message(
                     "missing_announcement_schedule",
-                    "Дата или время объявления не заданы. Проверьте настройки объявления.",
+                    "Время объявления не задано. Проверьте настройки объявления.",
                 )
                 continue
 
-            try:
-                announcement_date = datetime.date.fromisoformat(date_str)
-                if now.date() != announcement_date:
+            # Проверяем день недели для повторяющихся объявлений
+            today_key = WEEK_DAYS[now.weekday()]
+            
+            if repeat_days:
+                # Повторяющееся объявление - проверяем день недели
+                if today_key not in repeat_days:
                     continue
+            elif date_str:
+                # Одноразовое объявление - проверяем дату
+                try:
+                    announcement_date = datetime.date.fromisoformat(date_str)
+                    if now.date() != announcement_date:
+                        continue
+                except ValueError:
+                    continue
+            else:
+                # Нет ни repeat_days, ни даты - пропускаем
+                continue
 
+            try:
                 announcement_clock = self._parse_time(time_str)
                 announcement_time = now.replace(
                     hour=announcement_clock.hour,
@@ -1514,8 +1534,10 @@ class SchoolBell(QMainWindow):
                     status_text="📢 Объявление!",
                     log_message=f"Announcement played: {announcement_path.name}",
                 ):
-                    self.config.set_announcement_played_by_index(index, True)
-                    self.config.save_preferences(self.config.preferences)
+                    # Для одноразовых объявлений помечаем как сыгранное
+                    if not repeat_days:
+                        self.config.set_announcement_played_by_index(index, True)
+                        self.config.save_preferences(self.config.preferences)
                     # Обновляем состояние чекбокса и кнопки
                     self._update_announcement_ui_state()
             except Exception as e:

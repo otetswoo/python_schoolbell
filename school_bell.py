@@ -384,6 +384,14 @@ class SchoolBell(QMainWindow):
         self.announcement_btn.clicked.connect(self.manual_announcement)
         self.stop_btn.clicked.connect(self.manual_stop)
         
+        # Добавляем кнопку журнала событий
+        self.log_btn = QPushButton("📋")
+        self.log_btn.setMinimumHeight(34)
+        self.log_btn.setMaximumWidth(40)
+        self.log_btn.setToolTip(self.tr("action_log", "Журнал событий..."))
+        bottom_layout.addWidget(self.log_btn)
+        self.log_btn.clicked.connect(self.show_log_viewer)
+        
         # Обновляем текст кнопок
         self.bell_btn.setText("▶️ " + self.tr("btn_bell").replace("🔔", "").strip())
         self.music_btn.setText("▶️ " + self.tr("btn_music").replace("🎵", "").strip())
@@ -610,6 +618,18 @@ class SchoolBell(QMainWindow):
                     if variant in new_templates:
                         self.schedule_variants[key][variant] = list(new_templates[variant])
             QMessageBox.information(self, "OK", "Шаблоны обновлены")
+
+    def show_log_viewer(self):
+        """Открыть диалог просмотра журнала событий"""
+        from src.log_viewer_dialog import LogViewerDialog
+        dlg = LogViewerDialog(self, self.logger)
+        dlg.exec()
+
+    def show_profiles_dialog(self):
+        """Открыть диалог управления профилями расписания"""
+        from src.profiles_dialog import ProfilesDialog
+        dlg = ProfilesDialog(self, self.config, self)
+        dlg.exec()
 
     def load_data(self):
         prefs = self.config.preferences
@@ -1170,8 +1190,8 @@ class SchoolBell(QMainWindow):
 
         for lesson in lessons:
             try:
-                start = self._lesson_datetime(lesson, "start", today_date)
-                end = self._lesson_datetime(lesson, "end", today_date)
+                start = self._lesson_datetime(lesson, "start", now.date())
+                end = self._lesson_datetime(lesson, "end", now.date())
 
                 if self.bells_enabled:
                     bell_events = (

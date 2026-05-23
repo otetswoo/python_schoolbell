@@ -268,10 +268,6 @@ class AnnouncementSettingsDialog(QDialog):
                 self.config.save_preferences(self.config.preferences)
                 self.load_announcements()
 
-    def accept(self):
-        """Валидация данных перед сохранением объявления."""
-        super().accept()
-
 
 class AnnouncementEditDialog(QDialog):
     def __init__(self, parent, entry=None, config_manager=None):

@@ -73,7 +73,7 @@ LOCALIZATION = {
         "about_title": "О программе",
         "about_text": "<h2>Школьные звонки</h2>"
                         "<p>Автоматизация школьных звонков с гибким расписанием, музыкой на переменах и гимном и объявлениями.</p>"
-                        "<p><b>Версия:</b> 1.0</p>"
+                        "<p><b>Версия:</b> {version}</p>"
                         "<p><b>Репозиторий GitHub:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
                         "<p><b>Лицензия:</b> MIT</p>",
         "action_profiles": "Профили расписания...",
@@ -202,7 +202,7 @@ LOCALIZATION = {
         "about_title": "About",
         "about_text": "<h2>School Bell</h2>"
                         "<p>School bell automation with flexible schedule, break music anthem and announcements.</p>"
-                        "<p><b>Version:</b> 1.0</p>"
+                        "<p><b>Version:</b> {version}</p>"
                         "<p><b>GitHub Repository:</b> <a href='https://github.com/otetswoo/python_schoolbell'>github.com/otetswoo/python_schoolbell</a></p>"
                         "<p><b>License:</b> MIT</p>",
         "action_profiles": "Schedule Profiles...",

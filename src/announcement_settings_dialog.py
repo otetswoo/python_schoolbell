@@ -213,7 +213,8 @@ class AnnouncementSettingsDialog(QDialog):
 
     def on_add_clicked(self):
         """Открывает диалог добавления нового объявления."""
-        dialog = AnnouncementEditDialog(self, entry=None)
+        dialog = AnnouncementEditDialog(self, entry=None,
+                                        config_manager=self.config)
         if dialog.exec() == QDialog.Accepted:
             data = dialog.get_data()
             if not data:
@@ -238,7 +239,8 @@ class AnnouncementSettingsDialog(QDialog):
         announcements = self.config.get_announcements()
         if 0 <= row < len(announcements):
             entry = announcements[row].copy()
-            dialog = AnnouncementEditDialog(self, entry=entry)
+            dialog = AnnouncementEditDialog(self, entry=entry,
+                                            config_manager=self.config)
             if dialog.exec() == QDialog.Accepted:
                 data = dialog.get_data()
                 if not data:
@@ -268,41 +270,6 @@ class AnnouncementSettingsDialog(QDialog):
 
     def accept(self):
         """Валидация данных перед сохранением объявления."""
-        errors = []
-        RED = "QGroupBox { border: 2px solid #e53935; }"
-        OK = ""
-
-        file_path = self.file_label.text().replace("Файл: ", "").strip()
-        if not file_path or file_path == "не выбран":
-            errors.append("• Не выбран аудиофайл")
-            self.file_group.setStyleSheet(RED)
-        else:
-            self.file_group.setStyleSheet(OK)
-
-        if self.one_time_radio.isChecked():
-            selected_dt = datetime.datetime(
-                self.date_edit.date().year(), self.date_edit.date().month(),
-                self.date_edit.date().day(), self.hour_spin.value(), self.minute_spin.value()
-            )
-            if selected_dt < datetime.datetime.now():
-                reply = QMessageBox.question(self, "Время уже прошло",
-                    "Выбранные дата и время уже в прошлом.\n"
-                    "Объявление не сыграет автоматически.\n\nСохранить всё равно?",
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                if reply == QMessageBox.No:
-                    return
-
-        if self.repeat_radio.isChecked():
-            selected_days = [k for k, cb in self.day_checkboxes.items() if cb.isChecked()]
-            if not selected_days:
-                errors.append("• Не выбран ни один день недели")
-                self.days_group.setStyleSheet(RED)
-            else:
-                self.days_group.setStyleSheet(OK)
-
-        if errors:
-            QMessageBox.warning(self, "Заполните обязательные поля", "\n".join(errors))
-            return
         super().accept()
 
 

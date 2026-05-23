@@ -18,7 +18,7 @@ from PySide6.QtGui import QColor, QFont, QPalette, QKeySequence, QIcon, QAction
 from PySide6.QtCore import Qt, QTimer, QEvent
 
 from src.config import (
-    WEEK_DAYS, WEEK_DAYS_RU, WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN,
+    WEEK_DAYS, WEEK_DAYS_RU, WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN, VERSION,
     DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE, ensure_dirs
 )
 from src.config_manager import ConfigManager
@@ -32,8 +32,8 @@ from src.gui.localization import LOCALIZATION
 from src.event_logger import EventLogger
 from src.volume_control import VolumeControl
 
-# Версия приложения
-from src.config import VERSION as APP_VERSION
+# Version of the application
+APP_VERSION = VERSION
 
 COLOR_CURRENT_LIGHT = QColor("#c8e6c9")
 COLOR_SOON_LIGHT = QColor("#fff9c4")

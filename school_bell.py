@@ -3,7 +3,6 @@
 
 import sys
 import datetime
-import weakref
 from pathlib import Path
 import platform
 
@@ -554,6 +553,13 @@ class SchoolBell(QMainWindow):
         self.menuSettings.addAction(self.actionAnthem)
         self.menuSettings.addAction(self.actionAnnouncement)
         self.menuSettings.addAction(self.actionTemplates)
+        self.menuSettings.addSeparator()
+        self.actionProfiles = QAction(
+            self.tr("action_profiles", "Профили расписания..."), self)
+        self.actionLog = QAction(
+            self.tr("action_log", "Журнал событий..."), self)
+        self.menuSettings.addAction(self.actionProfiles)
+        self.menuSettings.addAction(self.actionLog)
         self.menuSettings.addMenu(self.menuLanguage)
         menubar.addMenu(self.menuSettings)
         
@@ -580,6 +586,8 @@ class SchoolBell(QMainWindow):
         self.actionAnthem.triggered.connect(self.show_anthem_settings)
         self.actionAnnouncement.triggered.connect(self.show_announcement_settings)
         self.actionTemplates.triggered.connect(self.show_templates_editor)
+        self.actionLog.triggered.connect(self.show_log_viewer)
+        self.actionProfiles.triggered.connect(self.show_profiles_dialog)
         self.actionLocaleRu.triggered.connect(lambda: self.set_locale("ru"))
         self.actionLocaleEn.triggered.connect(lambda: self.set_locale("en"))
         self.actionAbout.triggered.connect(self.show_about)
@@ -791,16 +799,6 @@ class SchoolBell(QMainWindow):
         status = f"{self.tr('btn_today').replace('📅', '').strip()} {date_html}"
 
         cur, seconds_left, next_seconds, is_break = self.get_current_lesson(now)
-
-        # Проверяем, не праздник ли сегодня
-        today_date = now.date()
-        if self.config.is_holiday(today_date):
-            holiday_text = " 🎉 " + self.tr("holiday", "Праздничный день" if self.current_locale == "ru" else "Holiday")
-            status += holiday_text
-            self.statusLabel.setTextFormat(Qt.RichText)
-            self.statusLabel.setText(status)
-            self.highlight_table(now, is_break=is_break)
-            return
 
         if cur:
             mins = seconds_left // 60
@@ -1074,9 +1072,7 @@ class SchoolBell(QMainWindow):
         finally:
             # Снимаем блокировку после небольшой задержки
             # Это позволяет избежать мгновенного повторного захвата
-            # Используем слабый захват self для предотвращения утечек памяти
-            self_ref = weakref.ref(self)
-            QTimer.singleShot(100, lambda: setattr(self_ref(), '_playback_lock', False) if self_ref() else None)
+            self._playback_lock = False
 
     def play_bell(self, bell_type, event_time):
         if not self.bells_enabled:
@@ -1153,32 +1149,13 @@ class SchoolBell(QMainWindow):
     def check_bells(self):
         now = datetime.datetime.now()
         today_key = WEEK_DAYS[now.weekday()]
-
-        # Проверяем, не праздник ли сегодня, до сброса состояния
-        today_date = now.date()
-        is_holiday = self.config.is_holiday(today_date)
-
-        # Проверяем смену дня и сбрасываем кэш автоматических событий
-        # Сброс происходит только если сегодня не праздник
-        if not is_holiday:
-            self._reset_daily_state(today_key)
-
-        # Проверяем автоматический запуск гимна и разового объявления
-        # Даже в праздничные дни гимн и объявления могут воспроизводиться
+        self._reset_daily_state(today_key)
         self.check_anthem(now)
         self.check_announcement(now)
-
-        # Проверяем звонки и музыку по расписанию текущего календарного дня
-        # Только если сегодня не праздник
-        if not is_holiday:
-            self.check_schedule_bells(now)
+        self.check_schedule_bells(now)
 
     def check_schedule_bells(self, now):
         """Проверка звонков и музыки по расписанию реального текущего дня."""
-        today_date = now.date()
-        if self.config.is_holiday(today_date):
-            return
-
         today_key = WEEK_DAYS[now.weekday()]
         lessons = self._get_lessons_for_day_key(today_key)
         if not lessons:
@@ -1287,14 +1264,12 @@ class SchoolBell(QMainWindow):
             self.config.save_preferences(self.config.preferences)
 
     def show_announcement_settings(self):
-        """Открыть диалог настройки разового объявления"""
+        """Открыть диалог настройки объявлений"""
         from src.announcement_settings_dialog import AnnouncementSettingsDialog
         dlg = AnnouncementSettingsDialog(self, self.config)
         if dlg.exec() == QDialog.Accepted:
-            announcement = self.config.get_announcement_settings()
-            self.announcement_enabled = announcement.get("enabled", False)
-            self.announcement_checkbox.setChecked(self.announcement_enabled)
             self.config.save_preferences(self.config.preferences)
+            self._update_announcement_ui_state()
 
     def set_locale(self, locale):
         self.current_locale = locale
@@ -1342,6 +1317,8 @@ class SchoolBell(QMainWindow):
         self.actionAnthem.setText(texts["action_anthem"])
         self.actionAnnouncement.setText(texts["action_announcement"])
         self.actionTemplates.setText(texts["action_templates"])
+        self.actionLog.setText(texts["action_log"])
+        self.actionProfiles.setText(texts["action_profiles"])
         self.menuLanguage.setTitle(texts["menu_language"])
         self.actionLocaleRu.setText(texts["action_locale_ru"])
         self.actionLocaleEn.setText(texts["action_locale_en"])

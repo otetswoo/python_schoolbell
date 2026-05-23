@@ -17,6 +17,7 @@ class EventLogger:
     
     def __init__(self):
         self.current_log_file = None
+        self.LOGS_DIR = LOGS_DIR
         self._cleanup_old_logs()
     
     def _get_log_filename(self, date=None):
@@ -30,12 +31,12 @@ class EventLogger:
         return LOGS_DIR / self._get_log_filename()
     
     def _cleanup_old_logs(self):
-        """Удаляет логи старше 3 дней"""
+        """Удаляет логи старше 7 дней"""
         if not LOGS_DIR.exists():
             return
         
         today = datetime.now().date()
-        cutoff_date = today - timedelta(days=3)
+        cutoff_date = today - timedelta(days=7)
         
         for log_file in LOGS_DIR.glob("bell_*.log"):
             try:

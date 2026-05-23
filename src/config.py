@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 # Version of the application
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # Handle PyInstaller frozen application paths
 if getattr(sys, 'frozen', False):
@@ -83,14 +83,6 @@ DEFAULT_SCHEDULE = {
         "folder": str(MUSIC_DIR),
         "delay_minutes": 2
     },
-    "announcement": {
-        "enabled": False,
-        "file": "",
-        "date": "",
-        "time": "08:30",
-        "played": False
-    },
-    "holidays": [],
     "profiles": {
         "default": {
             "name": "Стандартное"

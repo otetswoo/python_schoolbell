@@ -121,7 +121,8 @@ class SoundPlayer(QObject):
         """Остановка любого воспроизведения (звонка, музыки, гимна или объявления)."""
         if self.player:
             self.player.stop()
-        # Не очищаем current_type сразу - это нужно для проверки приоритетов
+        self.current_type = None
+        self.current_path = None
 
     def cleanup(self):
         """Корректно освобождает ресурсы Qt-объектов.

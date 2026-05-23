@@ -75,15 +75,7 @@ class MusicPlayer:
         self.played_today.clear()
     
     def play_random(self, folder=None):
-        if folder:
-            self.set_music_folder(folder)
-        
-        track = self.get_next_track()
-        if track and self.sound_player:
-            self.sound_player.play_music(str(track))
-            self.mark_played()
-            return True
-        return False
+        pass
     
     def stop(self):
         """Остановка музыки через общий SoundPlayer"""

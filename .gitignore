@@ -3,34 +3,38 @@
 *.pyc
 __pycache__/
 
-# Virtual environments
-venv/
+# Dependencies
 .venv/
+venv/
 .env
 .env.local
 *.env.*
 
-# IDE and editor files
+# Logs
+*.log
+
+# Editor/IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# Logs
-*.log
-
-# Build and distribution
-build/
+# Build/dist directories
 dist/
-*.egg-info/
+build/
+target/
 
-# Testing
-.pytest_cache/
+# Coverage reports
 .coverage
 coverage/
 htmlcov/
 
-# Type checking
+# Testing
+.pytest_cache/
 .mypy_cache/
+
+# OS generated files
+.DS_Store
+Thumbs.db
 ```

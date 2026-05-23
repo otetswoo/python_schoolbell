@@ -267,11 +267,47 @@ class AnnouncementSettingsDialog(QDialog):
                 self.load_announcements()
 
     def accept(self):
+        """Валидация данных перед сохранением объявления."""
+        errors = []
+        RED = "QGroupBox { border: 2px solid #e53935; }"
+        OK = ""
+
+        file_path = self.file_label.text().replace("Файл: ", "").strip()
+        if not file_path or file_path == "не выбран":
+            errors.append("• Не выбран аудиофайл")
+            self.file_group.setStyleSheet(RED)
+        else:
+            self.file_group.setStyleSheet(OK)
+
+        if self.one_time_radio.isChecked():
+            selected_dt = datetime.datetime(
+                self.date_edit.date().year(), self.date_edit.date().month(),
+                self.date_edit.date().day(), self.hour_spin.value(), self.minute_spin.value()
+            )
+            if selected_dt < datetime.datetime.now():
+                reply = QMessageBox.question(self, "Время уже прошло",
+                    "Выбранные дата и время уже в прошлом.\n"
+                    "Объявление не сыграет автоматически.\n\nСохранить всё равно?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if reply == QMessageBox.No:
+                    return
+
+        if self.repeat_radio.isChecked():
+            selected_days = [k for k, cb in self.day_checkboxes.items() if cb.isChecked()]
+            if not selected_days:
+                errors.append("• Не выбран ни один день недели")
+                self.days_group.setStyleSheet(RED)
+            else:
+                self.days_group.setStyleSheet(OK)
+
+        if errors:
+            QMessageBox.warning(self, "Заполните обязательные поля", "\n".join(errors))
+            return
         super().accept()
 
 
 class AnnouncementEditDialog(QDialog):
-    def __init__(self, parent, entry=None):
+    def __init__(self, parent, entry=None, config_manager=None):
         super().__init__(parent)
         
         if entry is None:
@@ -281,6 +317,7 @@ class AnnouncementEditDialog(QDialog):
         
         self.resize(500, 420)
         self.entry = entry or {}
+        self._config = config_manager
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -299,6 +336,7 @@ class AnnouncementEditDialog(QDialog):
         file_layout.addWidget(self.select_file_btn)
         
         layout.addWidget(file_group)
+        self.file_group = file_group  # Сохраняем ссылку для стилизации
 
         # Тип объявления (одноразовое/повторяющееся) - взаимоисключающие радиокнопки
         type_group = QGroupBox("Тип объявления")
@@ -351,17 +389,19 @@ class AnnouncementEditDialog(QDialog):
         
         layout.addWidget(self.date_group)
 
-        # Время
+        # Время - подставляем текущее + 5 минут
         time_group = QGroupBox("Время")
         time_layout = QHBoxLayout()
         time_group.setLayout(time_layout)
         
+        now = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        
         self.hour_spin = QSpinBox()
         self.hour_spin.setRange(0, 23)
-        self.hour_spin.setValue(8)
+        self.hour_spin.setValue(now.hour)
         self.minute_spin = QSpinBox()
         self.minute_spin.setRange(0, 59)
-        self.minute_spin.setValue(30)
+        self.minute_spin.setValue(now.minute)
         
         time_layout.addWidget(QLabel("Часы:"))
         time_layout.addWidget(self.hour_spin)
@@ -370,6 +410,12 @@ class AnnouncementEditDialog(QDialog):
         time_layout.addStretch()
         
         layout.addWidget(time_group)
+        
+        # Лейбл предупреждения о прошедшем времени
+        self._time_warning_label = QLabel("⚠️ Это время уже прошло")
+        self._time_warning_label.setStyleSheet("color: #e53935; font-size: 11px;")
+        self._time_warning_label.setVisible(False)
+        layout.addWidget(self._time_warning_label)
 
         # Громкость
         self.volume_control = VolumeControl(
@@ -401,10 +447,41 @@ class AnnouncementEditDialog(QDialog):
         layout.addLayout(btn_layout)
 
         self.load_entry()
+        
+        # Подключаем сигналы для живой валидации времени
+        self.date_edit.dateChanged.connect(self._validate_datetime_live)
+        self.hour_spin.valueChanged.connect(self._validate_datetime_live)
+        self.minute_spin.valueChanged.connect(self._validate_datetime_live)
+        self.one_time_radio.toggled.connect(self._validate_datetime_live)
+        
+        # Первичная валидация
+        self._validate_datetime_live()
 
     @property
     def config(self):
+        if self._config:
+            return self._config
         return self.parent().config
+    
+    def _validate_datetime_live(self):
+        """Живая подсветка прошедшего времени."""
+        RED = "QSpinBox { border: 2px solid #e53935; background: #fff3f3; }"
+        OK = ""
+        if self.one_time_radio.isChecked():
+            selected = datetime.datetime(
+                self.date_edit.date().year(), self.date_edit.date().month(),
+                self.date_edit.date().day(), self.hour_spin.value(), self.minute_spin.value()
+            )
+            is_past = selected < datetime.datetime.now()
+        else:
+            # Для повторяющихся — только время
+            is_past = datetime.time(self.hour_spin.value(), self.minute_spin.value()) \
+                      < datetime.datetime.now().time()
+
+        style = RED if is_past else OK
+        self.hour_spin.setStyleSheet(style)
+        self.minute_spin.setStyleSheet(style)
+        self._time_warning_label.setVisible(is_past)
 
     def on_type_changed(self):
         """Обработчик изменения типа объявления."""

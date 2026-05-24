@@ -172,6 +172,9 @@ class ConfigManager:
             self.schedule_data = {}
         if "profiles" not in self.schedule_data:
             self.schedule_data["profiles"] = {}
+        # Если schedules пустой — берём текущие шаблоны как основу
+        if not schedules:
+            schedules = self.schedule_data.get("schedules", {})
         self.schedule_data["profiles"][profile_name] = {
             "name": name_display,
             "schedules": schedules

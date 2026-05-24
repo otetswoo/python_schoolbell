@@ -21,6 +21,7 @@ class TemplatesEditorDialog(QDialog):
         
         self.schedule_variants = schedule_variants
         self.config = config
+        self.lessons_data = {}  # Инициализация один раз в __init__
         
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -63,7 +64,8 @@ class TemplatesEditorDialog(QDialog):
                 lessons = self.schedule_variants[key][template_type]
                 break
         
-        self.lessons_data = {template_type: [dict(l) for l in lessons]}
+        # Добавляем в уже существующий словарь (не перезаписываем весь dict)
+        self.lessons_data[template_type] = [dict(l) for l in lessons]
         self.refresh_list(template_type, list_widget)
         
         btn_layout = QHBoxLayout()

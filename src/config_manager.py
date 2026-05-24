@@ -211,3 +211,47 @@ class ConfigManager:
         """Возвращает громкость для указанного типа звука"""
         volumes = self.get_volumes()
         return volumes.get(sound_type, 50)
+
+    def get_announcements(self):
+        """Возвращает список всех объявлений"""
+        return self.preferences.get("announcements", [])
+
+    def get_active_announcements(self):
+        """Возвращает список кортежей (index, dict) активных объявлений.
+        Активное = enabled=True и played=False."""
+        result = []
+        for i, ann in enumerate(self.get_announcements()):
+            if ann.get("enabled", True) and not ann.get("played", False):
+                result.append((i, ann))
+        return result
+
+    def add_announcement(self, file, date, time, repeat_days=None):
+        """Добавляет объявление, возвращает его индекс"""
+        if "announcements" not in self.preferences:
+            self.preferences["announcements"] = []
+        ann = {
+            "file": file,
+            "date": date,
+            "time": time,
+            "enabled": True,
+            "played": False,
+            "repeat_days": repeat_days or [],
+        }
+        self.preferences["announcements"].append(ann)
+        return len(self.preferences["announcements"]) - 1
+
+    def update_announcement(self, index, **kwargs):
+        """Обновляет поля объявления по индексу"""
+        anns = self.preferences.get("announcements", [])
+        if 0 <= index < len(anns):
+            anns[index].update(kwargs)
+
+    def delete_announcement(self, index):
+        """Удаляет объявление по индексу"""
+        anns = self.preferences.get("announcements", [])
+        if 0 <= index < len(anns):
+            anns.pop(index)
+
+    def set_announcement_played_by_index(self, index, played):
+        """Помечает объявление как сыгранное или сбрасывает флаг"""
+        self.update_announcement(index, played=played)

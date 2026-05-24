@@ -317,6 +317,13 @@ class SchoolBell(QMainWindow):
         self.stop_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
         bottom_layout.addWidget(self.stop_btn)
         
+        # Кнопка журнала событий
+        self.log_btn = QPushButton("📋")
+        self.log_btn.setMinimumHeight(34)
+        self.log_btn.setMaximumWidth(40)
+        self.log_btn.setToolTip(self.tr("action_log", "Журнал событий..."))
+        bottom_layout.addWidget(self.log_btn)
+        
         main_layout.addWidget(buttons_frame)
         
         # Строка статуса
@@ -383,6 +390,7 @@ class SchoolBell(QMainWindow):
         self.anthem_btn.clicked.connect(self.manual_anthem)
         self.announcement_btn.clicked.connect(self.manual_announcement)
         self.stop_btn.clicked.connect(self.manual_stop)
+        self.log_btn.clicked.connect(self.show_log_viewer)
         
         # Обновляем текст кнопок
         self.bell_btn.setText("▶️ " + self.tr("btn_bell").replace("🔔", "").strip())
@@ -1170,8 +1178,8 @@ class SchoolBell(QMainWindow):
 
         for lesson in lessons:
             try:
-                start = self._lesson_datetime(lesson, "start", today_date)
-                end = self._lesson_datetime(lesson, "end", today_date)
+                start = self._lesson_datetime(lesson, "start", now.date())
+                end = self._lesson_datetime(lesson, "end", now.date())
 
                 if self.bells_enabled:
                     bell_events = (
@@ -1270,6 +1278,18 @@ class SchoolBell(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             self.config.save_preferences(self.config.preferences)
             self._update_announcement_ui_state()
+
+    def show_log_viewer(self):
+        """Открыть диалог просмотра журнала событий"""
+        from src.log_viewer_dialog import LogViewerDialog
+        dlg = LogViewerDialog(self, self.logger)
+        dlg.exec()
+
+    def show_profiles_dialog(self):
+        """Открыть диалог управления профилями расписания"""
+        from src.profiles_dialog import ProfilesDialog
+        dlg = ProfilesDialog(self, self.config, self)
+        dlg.exec()
 
     def set_locale(self, locale):
         self.current_locale = locale

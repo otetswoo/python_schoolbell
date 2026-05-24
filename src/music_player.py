@@ -74,9 +74,6 @@ class MusicPlayer:
     def reset_daily(self):
         self.played_today.clear()
     
-    def play_random(self, folder=None):
-        pass
-    
     def stop(self):
         """Остановка музыки через общий SoundPlayer"""
         if self.sound_player:

@@ -67,11 +67,12 @@ class LogViewerDialog(QDialog):
         layout.addLayout(btn_layout)
 
         # По умолчанию загружаем события сегодня
-        self.load_today_events()
+        self.load_selected_day()
 
     def load_today_events(self):
         """Загружает события за сегодня"""
         self.day_selector.setCurrentIndex(0)
+        self.load_selected_day()
 
     def load_selected_day(self):
         """Загружает события за выбранный день"""

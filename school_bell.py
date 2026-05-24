@@ -164,9 +164,6 @@ class SchoolBell(QMainWindow):
         self.bells_enabled = bells_prefs.get("enabled", True)
         self.current_playing_track = None
         self.main_window_message = None
-        
-        # Блокировка для предотвращения гонок условий при воспроизведении
-        self._playback_lock = False
 
         music_settings = self.config.get_music_settings()
         self.music_enabled = music_settings.get("enabled", False)
@@ -318,6 +315,13 @@ class SchoolBell(QMainWindow):
         bottom_layout.addWidget(self.stop_btn)
         
         main_layout.addWidget(buttons_frame)
+        
+        # Метка для отображения текущего трека
+        self.trackLabel = QLabel("")
+        self.trackLabel.setMinimumHeight(20)
+        self.trackLabel.setStyleSheet("color: #1565c0; font-size: 11px; padding: 2px 8px;")
+        self.trackLabel.setVisible(False)
+        main_layout.addWidget(self.trackLabel)
         
         # Строка статуса
         self.statusLabel = QLabel(self.tr("status_ready", "Ready"))
@@ -838,11 +842,17 @@ class SchoolBell(QMainWindow):
         else:
             status += f"   |   {self.tr('status_lessons_finished', 'Lessons are finished')}"
 
-        # Формируем вторую строку статуса (трек и сообщения)
-        second_line_parts = []
+        # Обновляем метку текущего трека отдельно
         if self.current_playing_track:
             track_name = Path(self.current_playing_track).name
-            second_line_parts.append(f"▶️ {track_name}")
+            self.trackLabel.setText(f"▶️ {track_name}")
+            self.trackLabel.setVisible(True)
+        else:
+            self.trackLabel.setText("")
+            self.trackLabel.setVisible(False)
+
+        # Формируем вторую строку статуса (только сообщения, без трека)
+        second_line_parts = []
         if self.main_window_message:
             second_line_parts.append(f"⚠️ {self.main_window_message}")
 
@@ -851,6 +861,55 @@ class SchoolBell(QMainWindow):
 
         self.statusLabel.setTextFormat(Qt.RichText)
         self.statusLabel.setText(status)
+        
+        # === ОБНОВЛЕНИЕ ЗАГОЛОВКА ОКНА С COUNTDOWN ===
+        base_title = self.tr("app_title")
+        if cur and seconds_left is not None:
+            mins = seconds_left // 60
+            secs = seconds_left % 60
+            bell_label = "до звонка" if self.current_locale == "ru" else "to bell"
+            window_title = f"{base_title} — {mins}:{secs:02d} {bell_label}"
+        elif next_seconds is not None and next_seconds > 0:
+            mins = next_seconds // 60
+            secs = next_seconds % 60
+            next_label = "до урока" if self.current_locale == "ru" else "to lesson"
+            window_title = f"{base_title} — {mins}:{secs:02d} {next_label}"
+        else:
+            window_title = base_title
+
+        self.setWindowTitle(window_title)
+
+        # Обновляем tooltip трея с countdown и ближайшими звонками
+        if self.tray_icon:
+            tray_lines = [window_title]
+            # Добавляем ближайшие звонки из расписания текущего дня
+            if self.current_day:
+                idx = WEEK_DAYS_RU.index(self.current_day)
+                key = WEEK_DAYS[idx]
+                lessons = self.schedule_variants.get(key, {}).get(self.current_variant, [])
+                now_time = now.time()
+                upcoming = []
+                for lesson in lessons:
+                    try:
+                        start_t = self._parse_time(lesson.get("start", ""))
+                        end_t = self._parse_time(lesson.get("end", ""))
+                        num = lesson.get("num", "?")
+                        if start_t > now_time:
+                            label = "▶"
+                            upcoming.append(f"  {label} Урок {num}: {lesson['start']}" if self.current_locale == "ru"
+                                           else f"  {label} Lesson {num}: {lesson['start']}")
+                        elif end_t > now_time:
+                            label = "📖"
+                            upcoming.append(f"  {label} Урок {num} до {lesson['end']}" if self.current_locale == "ru"
+                                           else f"  {label} Lesson {num} until {lesson['end']}")
+                        if len(upcoming) >= 3:
+                            break
+                    except Exception:
+                        continue
+                if upcoming:
+                    tray_lines.extend(upcoming)
+            self.tray_icon.setToolTip("\n".join(tray_lines))
+        
         self.highlight_table(now, is_break=is_break)
 
     def get_current_lesson(self, now):
@@ -1014,6 +1073,15 @@ class SchoolBell(QMainWindow):
             path = self._resolve_existing_file(candidate)
             if path:
                 return str(path)
+        
+        # Дополнительный fallback: искать файл по имени в SOUNDS_DIR
+        from src.config import SOUNDS_DIR
+        for candidate in candidates:
+            if candidate:
+                filename = Path(candidate).name
+                fallback = SOUNDS_DIR / filename
+                if fallback.exists():
+                    return str(fallback)
         return ""
 
     def _reset_daily_state(self, day_key):

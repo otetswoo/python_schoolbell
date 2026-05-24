@@ -9,6 +9,12 @@ import yaml
 
 from src.config import DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE, WEEK_DAYS
 
+RU_TO_EN_DAYS = {
+    "Понедельник": "monday", "Вторник": "tuesday", "Среда": "wednesday",
+    "Четверг": "thursday", "Пятница": "friday", "Суббота": "saturday",
+    "Воскресенье": "sunday"
+}
+
 
 class ConfigManager:
     def __init__(self):
@@ -45,6 +51,9 @@ class ConfigManager:
                 with open(PREFERENCES_FILE, "r", encoding="utf-8") as f:
                     self.preferences = yaml.safe_load(f) or {}
                 
+                # Миграция старых русских ключей вариантов дней в английские
+                self._migrate_variants()
+                
                 # Миграция старого формата объявлений в новый
                 old = self.preferences.get("announcement")
                 has_new = "announcements" in self.preferences and self.preferences["announcements"]
@@ -67,11 +76,48 @@ class ConfigManager:
                 return True
             except Exception as e:
                 print(f"Error loading preferences: {e}")
+                # Пробуем восстановить из бэкапа
+                bak_path = Path(PREFERENCES_FILE).with_suffix(".yml.bak")
+                if bak_path.exists():
+                    try:
+                        with open(bak_path, "r", encoding="utf-8") as f:
+                            self.preferences = yaml.safe_load(f) or {}
+                        print("Preferences restored from backup")
+                        self._migrate_variants()
+                        return True
+                    except Exception:
+                        pass
         self.preferences = {"announcements": []}
         return False
+    
+    def _migrate_variants(self):
+        """Мигрирует русские ключи вариантов дней в английские."""
+        variants = self.preferences.get("variants", {})
+        if not variants:
+            return
+        
+        migrated = False
+        for ru_key, en_key in RU_TO_EN_DAYS.items():
+            if ru_key in variants:
+                # Копируем значение в английский ключ, если его ещё нет
+                if en_key not in variants:
+                    variants[en_key] = variants[ru_key]
+                # Удаляем русский ключ
+                del variants[ru_key]
+                migrated = True
+        
+        if migrated:
+            self.preferences["variants"] = variants
 
     def save_preferences(self, prefs):
         try:
+            # Автобэкап перед перезаписью
+            pref_path = Path(PREFERENCES_FILE)
+            if pref_path.exists():
+                bak_path = pref_path.with_suffix(".yml.bak")
+                import shutil
+                shutil.copy2(pref_path, bak_path)
+            
             prefs["last_saved"] = datetime.datetime.now().isoformat()
             with open(PREFERENCES_FILE, "w", encoding="utf-8") as f:
                 yaml.dump(prefs, f, allow_unicode=True, default_flow_style=False)
@@ -79,6 +125,16 @@ class ConfigManager:
         except Exception as e:
             print(f"Error saving preferences: {e}")
             return False
+    
+    def restore_from_backup(self):
+        """Восстанавливает preferences.yml из .bak если основной файл повреждён."""
+        pref_path = Path(PREFERENCES_FILE)
+        bak_path = pref_path.with_suffix(".yml.bak")
+        if bak_path.exists():
+            import shutil
+            shutil.copy2(bak_path, pref_path)
+            return self.load_preferences()
+        return False
 
     def get_day_variant(self, day_ru):
         return self.preferences.get("variants", {}).get(day_ru, "usual")

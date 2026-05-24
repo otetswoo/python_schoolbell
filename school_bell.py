@@ -143,7 +143,7 @@ class SchoolBell(QMainWindow):
 
         self.current_locale = self.config.get_locale()
 
-        # Инициализация логгера
+        # Инициализация логгера (после ensure_dirs)
         self.logger = EventLogger()
         self.logger.log_event("info", "Application started")
 
@@ -317,18 +317,11 @@ class SchoolBell(QMainWindow):
         self.stop_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
         bottom_layout.addWidget(self.stop_btn)
         
-        # Кнопка журнала событий
-        self.log_btn = QPushButton("📋")
-        self.log_btn.setMinimumHeight(34)
-        self.log_btn.setMaximumWidth(40)
-        self.log_btn.setToolTip(self.tr("action_log", "Журнал событий..."))
-        bottom_layout.addWidget(self.log_btn)
-        
         main_layout.addWidget(buttons_frame)
         
         # Строка статуса
         self.statusLabel = QLabel(self.tr("status_ready", "Ready"))
-        self.statusLabel.setMinimumHeight(35)
+        self.statusLabel.setMinimumHeight(50)
         self.statusLabel.setStyleSheet("background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
         self.statusLabel.setWordWrap(True)
         main_layout.addWidget(self.statusLabel)
@@ -390,7 +383,6 @@ class SchoolBell(QMainWindow):
         self.anthem_btn.clicked.connect(self.manual_anthem)
         self.announcement_btn.clicked.connect(self.manual_announcement)
         self.stop_btn.clicked.connect(self.manual_stop)
-        self.log_btn.clicked.connect(self.show_log_viewer)
         
         # Обновляем текст кнопок
         self.bell_btn.setText("▶️ " + self.tr("btn_bell").replace("🔔", "").strip())
@@ -617,7 +609,13 @@ class SchoolBell(QMainWindow):
                 for variant in ["usual", "short"]:
                     if variant in new_templates:
                         self.schedule_variants[key][variant] = list(new_templates[variant])
-            QMessageBox.information(self, "OK", "Шаблоны обновлены")
+            # Сохраняем изменения в schedule.yml
+            schedules_to_save = {v: list(new_templates.get(v, [])) for v in ["usual", "short"]}
+            if self.config.schedule_data:
+                self.config.schedule_data["schedules"] = schedules_to_save
+                self.config.save_schedule(self.config.schedule_data)
+            self.select_day(self.current_day)  # обновить таблицу
+            QMessageBox.information(self, "OK", "Шаблоны обновлены и сохранены")
 
     def load_data(self):
         prefs = self.config.preferences
@@ -840,14 +838,16 @@ class SchoolBell(QMainWindow):
         else:
             status += f"   |   {self.tr('status_lessons_finished', 'Lessons are finished')}"
 
-        # Добавляем индикатор текущего воспроизведения
-        if hasattr(self, 'current_playing_track') and self.current_playing_track:
-            track_name = Path(self.current_playing_track).name if self.current_playing_track else ""
-            playing_text = f"   |   ▶️ {track_name}" if self.current_locale == "ru" else f"   |   ▶️ {track_name}"
-            status += playing_text
-
+        # Формируем вторую строку статуса (трек и сообщения)
+        second_line_parts = []
+        if self.current_playing_track:
+            track_name = Path(self.current_playing_track).name
+            second_line_parts.append(f"▶️ {track_name}")
         if self.main_window_message:
-            status += f"   |   ⚠️ {self.main_window_message}"
+            second_line_parts.append(f"⚠️ {self.main_window_message}")
+
+        if second_line_parts:
+            status += "<br><span style='color:#555; font-size:11px;'>" + "   |   ".join(second_line_parts) + "</span>"
 
         self.statusLabel.setTextFormat(Qt.RichText)
         self.statusLabel.setText(status)
@@ -977,8 +977,6 @@ class SchoolBell(QMainWindow):
         message = self.tr(message_key, fallback)
         message_changed = self.main_window_message != message
         self.main_window_message = message
-        if hasattr(self, "statusLabel"):
-            self.statusLabel.setText(f"⚠️ {message}")
         if message_changed:
             self.logger.log_event("warning", message)
 
@@ -1042,45 +1040,34 @@ class SchoolBell(QMainWindow):
     def _play_cached_audio(self, event_type, event_time, path, volume, status_text=None, log_message=None):
         """Проигрывает событие один раз в минутном окне и помечает его в кэше.
         
-        Использует блокировку для предотвращения гонок условий при одновременных вызовах.
         Приоритет событий: anthem > announcement > start/end > music
         """
         cache_key = self._event_cache_key(event_type, event_time)
         if cache_key in self.played_events:
             return False
+
+        # Проверяем приоритет: не перебиваем более важное событие
+        priority_order = {"anthem": 0, "announcement": 1, "start": 2, "end": 2, "music": 3}
+        new_priority = priority_order.get(event_type, 99)
         
-        # Проверка блокировки для предотвращения гонок
-        if self._playback_lock:
-            # Если уже идет воспроизведение, проверяем приоритет
-            current_type = self.sound_player.current_type
-            # Более важные события могут прервать менее важные
-            priority_order = {"anthem": 0, "announcement": 1, "start": 2, "end": 2, "music": 3}
-            new_priority = priority_order.get(event_type, 99)
+        if self.sound_player.is_playing():
+            current_type = self.sound_player.current_type  # читаем до stop_all
             current_priority = priority_order.get(current_type, 99)
-            
             if new_priority >= current_priority:
-                # Менее важное или равное событие не прерывает текущее
-                self.played_events[cache_key] = True  # Помечаем как сыгранное
+                self.played_events[cache_key] = True  # пометить как пропущенное
                 return False
-        
-        # Устанавливаем блокировку
-        self._playback_lock = True
-        try:
-            self.sound_player.stop_all()
-            if self.sound_player.play(str(path), event_type, volume=volume):
-                self._clear_main_window_message()
-                self.played_events[cache_key] = True
-                if status_text:
-                    self.statusLabel.setText(status_text)
-                if log_message:
-                    category = "bell" if event_type in {"start", "end"} else event_type
-                    self.logger.log_event(category, log_message)
-                return True
-            return False
-        finally:
-            # Снимаем блокировку после небольшой задержки
-            # Это позволяет избежать мгновенного повторного захвата
-            self._playback_lock = False
+
+        self.sound_player.stop_all()
+        if self.sound_player.play(str(path), event_type, volume=volume):
+            self._clear_main_window_message()
+            self.played_events[cache_key] = True
+            if status_text:
+                self.statusLabel.setText(status_text)
+            if log_message:
+                category = "bell" if event_type in {"start", "end"} else event_type
+                self.logger.log_event(category, log_message)
+            return True
+        return False
 
     def play_bell(self, bell_type, event_time):
         if not self.bells_enabled:

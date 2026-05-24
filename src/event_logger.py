@@ -18,6 +18,7 @@ class EventLogger:
     def __init__(self):
         self.current_log_file = None
         self.LOGS_DIR = LOGS_DIR
+        self.LOGS_DIR.mkdir(parents=True, exist_ok=True)  # Создаём директорию если её нет
         self._cleanup_old_logs()
     
     def _get_log_filename(self, date=None):
@@ -77,7 +78,8 @@ class EventLogger:
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(log_entry)
         except Exception as e:
-            print(f"Error writing to log: {e}")
+            import sys
+            print(f"Error writing to log: {e}", file=sys.stderr)
     
     def get_today_events(self):
         """Возвращает список событий за сегодня"""

@@ -105,7 +105,7 @@ class AnthemSettingsDialog(QDialog):
             h, m = map(int, time_str.split(":"))
             self.hour_spin.setValue(h)
             self.minute_spin.setValue(m)
-        except:
+        except (ValueError, TypeError):
             pass
     
     def select_file(self):

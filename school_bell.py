@@ -171,9 +171,6 @@ class SchoolBell(QMainWindow):
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_enabled = anthem_settings.get("enabled", False)
 
-        active = self.config.get_active_announcements()
-        self.announcement_enabled = len(active) > 0
-
         # Настройки системного трея
         self.tray_icon = None
         self.force_quit = False
@@ -370,8 +367,7 @@ class SchoolBell(QMainWindow):
         self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
         self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
         
-        active = self.config.get_active_announcements()
-        self.announcement_checkbox.setChecked(len(active) > 0)
+        self.announcement_checkbox.setChecked(self.announcement_enabled)
         self.announcement_checkbox.stateChanged.connect(self.on_announcement_toggled)
 
         # Создаем контролы громкости
@@ -1369,8 +1365,8 @@ class SchoolBell(QMainWindow):
             control.set_title(texts[f"volume_{volume_type}"])
 
         self.today_btn.setText(texts["btn_today"])
-        self.bell_btn.setText("▶️ " + texts["btn_bell"].replace("🔔", "").strip())
-        self.music_btn.setText("▶️ " + texts["btn_music"].replace("🎵", "").strip())
+        self.bell_btn.setText(self._get_bell_button_text())
+        self.music_btn.setText(self._get_music_button_text())
         self.anthem_btn.setText(self._get_anthem_button_text())
         self.announcement_btn.setText(self._get_announcement_button_text())
         self.stop_btn.setText(texts["btn_stop"])
@@ -1401,6 +1397,14 @@ class SchoolBell(QMainWindow):
         self.actionAbout.setText(texts["action_about"])
         self.actionToday.setText(texts["action_today"])
 
+        # Обновляем текст действий трея
+        if hasattr(self, 'tray_action_show'):
+            self.tray_action_show.setText(texts["tray_show"])
+        if hasattr(self, 'tray_action_today'):
+            self.tray_action_today.setText(texts["tray_today"])
+        if hasattr(self, 'tray_action_exit'):
+            self.tray_action_exit.setText(texts["tray_exit"])
+
     def on_bells_toggled(self, state):
         self.bells_enabled = (state != 0)
         # Сохраняем состояние в настройки
@@ -1413,6 +1417,7 @@ class SchoolBell(QMainWindow):
                 "missing_bell_sound",
                 "Мелодия звонка не выбрана. Выберите звук в настройках.",
             )
+        self.bell_btn.setText(self._get_bell_button_text())
 
     def on_music_toggled(self, state):
         self.music_enabled = (state != 0)
@@ -1432,6 +1437,9 @@ class SchoolBell(QMainWindow):
                     "missing_music_tracks",
                     "В выбранной папке нет аудиофайлов.",
                 )
+            else:
+                self._clear_main_window_message()
+        self.music_btn.setText(self._get_music_button_text())
 
     def on_anthem_toggled(self, state):
         self.anthem_enabled = (state != 0)
@@ -1799,19 +1807,19 @@ class SchoolBell(QMainWindow):
         # Создаем меню трея
         tray_menu = QMenu()
 
-        show_act = QAction(self.tr("tray_show", "Показать"), self)
-        show_act.triggered.connect(self.show_window)
-        tray_menu.addAction(show_act)
+        self.tray_action_show = QAction(self.tr("tray_show", "Показать"), self)
+        self.tray_action_show.triggered.connect(self.show_window)
+        tray_menu.addAction(self.tray_action_show)
 
-        today_act = QAction(self.tr("tray_today", "Сегодня"), self)
-        today_act.triggered.connect(self.set_today_schedule)
-        tray_menu.addAction(today_act)
+        self.tray_action_today = QAction(self.tr("tray_today", "Сегодня"), self)
+        self.tray_action_today.triggered.connect(self.set_today_schedule)
+        tray_menu.addAction(self.tray_action_today)
 
         tray_menu.addSeparator()
 
-        exit_act = QAction(self.tr("tray_exit", "Выход"), self)
-        exit_act.triggered.connect(self.quit_application)
-        tray_menu.addAction(exit_act)
+        self.tray_action_exit = QAction(self.tr("tray_exit", "Выход"), self)
+        self.tray_action_exit.triggered.connect(self.quit_application)
+        tray_menu.addAction(self.tray_action_exit)
 
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(self.on_tray_activated)

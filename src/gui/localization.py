@@ -130,6 +130,10 @@ LOCALIZATION = {
         "ann_col_days": "Дни",
         "announcements_info": "Настройка объявлений.\nВыберите аудиофайл, дату/дни недели и время воспроизведения.\nОбъявления могут быть одноразовыми или повторяющимися.",
         "ann_select_file_title": "Выберите файл объявления",
+        "no_active_announcements": "Нет активных объявлений",
+        "tray_show": "Показать",
+        "tray_today": "Сегодня",
+        "tray_exit": "Выход",
     },
     "en": {
         "app_title": "School Bell",
@@ -259,5 +263,9 @@ LOCALIZATION = {
         "ann_col_days": "Days",
         "announcements_info": "Announcement settings.\nSelect audio file, date/weekdays and time for playback.\nAnnouncements can be one-time or recurring.",
         "ann_select_file_title": "Select announcement file",
+        "no_active_announcements": "No active announcements",
+        "tray_show": "Show",
+        "tray_today": "Today",
+        "tray_exit": "Exit",
     }
 }

@@ -49,6 +49,17 @@ class ScheduleEditorDialog(QDialog):
         
         btn_layout.addStretch()
         
+        # Кнопки перемещения вверх/вниз
+        up_btn = QPushButton("⬆️ Вверх")
+        up_btn.clicked.connect(self.move_up)
+        btn_layout.addWidget(up_btn)
+        
+        down_btn = QPushButton("⬇️ Вниз")
+        down_btn.clicked.connect(self.move_down)
+        btn_layout.addWidget(down_btn)
+        
+        btn_layout.addStretch()
+        
         # Кнопка "Вставить из" с меню
         paste_btn = QPushButton("📋 Вставить из")
         paste_menu = QMenu(self)

@@ -28,6 +28,11 @@ pip install PySide6 pyyaml && git clone https://github.com/otetswoo/python_schoo
 pip install PySide6 pyyaml && python school_bell.py
 ```
 
+## Если используется Альт Linux (EPM) можно установить самый последний релиз командой:
+```bash
+curl -s https://api.github.com/repos/otetswoo/python_schoolbell/releases/latest | grep "browser_download_url.*\.deb" | head -1 | cut -d : -f 2,3 | tr -d \" | wget -qi - && sudo epm install --scripts *.deb
+```
+
 ## 📁 Структура
 
 ```

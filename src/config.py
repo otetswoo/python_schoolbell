@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 # Version of the application
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 # Handle PyInstaller frozen application paths
 if getattr(sys, 'frozen', False):

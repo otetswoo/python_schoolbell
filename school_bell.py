@@ -1119,13 +1119,12 @@ class SchoolBell(QMainWindow):
         new_priority = priority_order.get(event_type, 99)
         
         if self.sound_player.is_playing():
-            current_type = self.sound_player.current_type  # читаем до stop_all
+            current_type = self.sound_player.current_type
             current_priority = priority_order.get(current_type, 99)
             if new_priority >= current_priority:
                 self.played_events[cache_key] = True  # пометить как пропущенное
                 return False
 
-        self.sound_player.stop_all()
         if self.sound_player.play(str(path), event_type, volume=volume):
             self._clear_main_window_message()
             self.played_events[cache_key] = True
@@ -1739,6 +1738,20 @@ class SchoolBell(QMainWindow):
         """Возвращает текст кнопки объявления в зависимости от состояния."""
         btn_text = self.tr("btn_announcement").replace("📢", "").strip()
         if self.announcement_enabled:
+            return "▶️ " + btn_text
+        else:
+            return "⏸️ " + btn_text
+
+    def _get_bell_button_text(self):
+        btn_text = self.tr("btn_bell").replace("🔔", "").strip()
+        if self.bells_enabled:
+            return "▶️ " + btn_text
+        else:
+            return "⏸️ " + btn_text
+
+    def _get_music_button_text(self):
+        btn_text = self.tr("btn_music").replace("🎵", "").strip()
+        if self.music_enabled:
             return "▶️ " + btn_text
         else:
             return "⏸️ " + btn_text

@@ -9,21 +9,20 @@ import platform
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QLabel, QMenu, QFileDialog, QMessageBox,
-    QHeaderView, QMenuBar, QDialog, QListWidget, QListWidgetItem, QCheckBox,
-    QFormLayout, QSpinBox, QComboBox, QDialogButtonBox, QGroupBox, QSystemTrayIcon,
+    QHeaderView, QDialog, QListWidget, QListWidgetItem, QCheckBox,
+    QGroupBox, QSystemTrayIcon,
     QFrame,
 )
-from PySide6.QtGui import QColor, QFont, QPalette, QKeySequence, QIcon, QAction
-from PySide6.QtCore import Qt, QTimer, QEvent
+from PySide6.QtGui import QColor, QFont, QKeySequence, QIcon, QAction
+from PySide6.QtCore import Qt, QTimer
 
 from src.config import (
     WEEK_DAYS, WEEK_DAYS_RU, WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN, VERSION,
-    DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE, ensure_dirs
+    DEFAULT_SCHEDULE, SCHEDULE_PATH, ensure_dirs
 )
 from src.config_manager import ConfigManager
 from src.sound_player import SoundPlayer
 from src.music_player import MusicPlayer
-from src.lesson_dialog import LessonDialog
 from src.music_settings_dialog import MusicSettingsDialog
 from src.bell_settings_dialog import BellSettingsDialog
 from src.schedule_editor_dialog import ScheduleEditorDialog
@@ -170,6 +169,10 @@ class SchoolBell(QMainWindow):
 
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_enabled = anthem_settings.get("enabled", False)
+
+        # Состояние объявлений должно быть инициализировано до init_ui,
+        # т.к. чекбокс использует его при первом построении интерфейса.
+        self.announcement_enabled = len(self.config.get_active_announcements()) > 0
 
         # Настройки системного трея
         self.tray_icon = None
@@ -664,13 +667,13 @@ class SchoolBell(QMainWindow):
         lessons = self.schedule_variants.get(key, {}).get(variant, [])
 
         self.scheduleTable.setRowCount(0)
-        for l in lessons:
+        for lesson in lessons:
             row = self.scheduleTable.rowCount()
             self.scheduleTable.insertRow(row)
-            self.scheduleTable.setItem(row, 0, QTableWidgetItem(l.get("start", "")))
-            self.scheduleTable.setItem(row, 1, QTableWidgetItem(l.get("end", "")))
+            self.scheduleTable.setItem(row, 0, QTableWidgetItem(lesson.get("start", "")))
+            self.scheduleTable.setItem(row, 1, QTableWidgetItem(lesson.get("end", "")))
             # Третий столбец - длительность перемены (время от конца текущего до начала следующего)
-            break_duration = self._calculate_break_duration(l, lessons)
+            break_duration = self._calculate_break_duration(lesson, lessons)
             self.scheduleTable.setItem(row, 2, QTableWidgetItem(break_duration))
 
         self._update_day_buttons_style()
@@ -923,18 +926,18 @@ class SchoolBell(QMainWindow):
 
         today = now.date()
         parsed = []
-        for l in lessons:
+        for lesson in lessons:
             try:
-                s = self._lesson_datetime(l, "start", today)
-                e = self._lesson_datetime(l, "end", today)
-                parsed.append((s, e, l))
-            except:
+                s = self._lesson_datetime(lesson, "start", today)
+                e = self._lesson_datetime(lesson, "end", today)
+                parsed.append((s, e, lesson))
+            except Exception:
                 continue
 
         # Проверяем, на уроке ли мы сейчас
-        for s, e, l in parsed:
+        for s, e, lesson in parsed:
             if s <= now <= e:
-                return l, int((e - now).total_seconds()), None, False
+                return lesson, int((e - now).total_seconds()), None, False
 
         # Проверяем, на перемене ли мы сейчас (между уроками)
         for i in range(len(parsed) - 1):
@@ -946,7 +949,7 @@ class SchoolBell(QMainWindow):
                 return None, None, int((s_next - now).total_seconds()), True
         
         # Ищем следующий звонок (первый урок дня)
-        for s, e, l in parsed:
+        for s, e, lesson in parsed:
             if now < s:
                 return None, None, int((s - now).total_seconds()), False
 
@@ -975,7 +978,7 @@ class SchoolBell(QMainWindow):
                 end = datetime.datetime.combine(today, self._parse_time(end_str))
                 if end < now:
                     last_ended_row = r
-            except:
+            except Exception:
                 continue
 
         for r in range(rows):
@@ -1000,7 +1003,7 @@ class SchoolBell(QMainWindow):
                     if item:
                         item.setBackground(bg)
 
-            except Exception as e:
+            except Exception:
                 # Игнорируем ошибки парсинга времени для пустых или некорректных строк
                 continue
 
@@ -1927,4 +1930,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

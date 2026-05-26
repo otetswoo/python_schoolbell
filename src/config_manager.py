@@ -137,12 +137,14 @@ class ConfigManager:
         return False
 
     def get_day_variant(self, day_ru):
-        return self.preferences.get("variants", {}).get(day_ru, "usual")
+        day_key = RU_TO_EN_DAYS.get(day_ru, day_ru)
+        return self.preferences.get("variants", {}).get(day_key, "usual")
 
     def set_day_variant(self, day_ru, variant):
         if "variants" not in self.preferences:
             self.preferences["variants"] = {}
-        self.preferences["variants"][day_ru] = variant
+        day_key = RU_TO_EN_DAYS.get(day_ru, day_ru)
+        self.preferences["variants"][day_key] = variant
 
     def get_sounds(self):
         sounds = self.preferences.get("sounds", {})

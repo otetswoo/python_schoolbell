@@ -7,7 +7,7 @@ from src.config import BREAK_DURATIONS
 
 
 class LessonDialog(QDialog):
-    def __init__(self, parent, lesson=None, next_start=None):
+    def __init__(self, parent, lesson=None):
         super().__init__(parent)
         self.setWindowTitle("Урок")
         self.resize(350, 200)

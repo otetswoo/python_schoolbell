@@ -14,30 +14,35 @@ import datetime
 from src.config_manager import ConfigManager
 from src.volume_control import VolumeControl
 from src.config import WEEK_DAYS, WEEK_DAYS_RU
+from src.gui.localization import LOCALIZATION
 
 
 class AnnouncementSettingsDialog(QDialog):
     def __init__(self, parent, config_manager: ConfigManager):
         super().__init__(parent)
-        self.setWindowTitle("📢 Объявления")
+        self.current_locale = config_manager.get_locale() if hasattr(config_manager, 'get_locale') else 'ru'
+        self.setWindowTitle(self.tr("announcements_dialog_title"))
         self.resize(750, 450)
         self.config = config_manager
 
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        info = QLabel(
-            "Настройка объявлений.\n"
-            "Выберите аудиофайл, дату/дни недели и время воспроизведения.\n"
-            "Объявления могут быть одноразовыми или повторяющимися."
-        )
+        info = QLabel(self.tr("announcements_info"))
         info.setWordWrap(True)
         layout.addWidget(info)
 
         # Таблица объявлений
         self.table = QTableWidget()
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Вкл", "Повтор", "Файл", "Дата", "Время", "Статус"])
+        self.table.setHorizontalHeaderLabels([
+            "✓",
+            self.tr("ann_col_days"),
+            self.tr("ann_col_file"),
+            self.tr("ann_col_date"),
+            self.tr("ann_col_time"),
+            self.tr("ann_col_status")
+        ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
@@ -55,15 +60,15 @@ class AnnouncementSettingsDialog(QDialog):
         # Кнопки под таблицей
         btn_layout = QHBoxLayout()
         
-        self.add_btn = QPushButton("➕ Добавить")
+        self.add_btn = QPushButton(self.tr("btn_add_announcement"))
         self.add_btn.clicked.connect(self.on_add_clicked)
         btn_layout.addWidget(self.add_btn)
 
-        self.edit_btn = QPushButton("✏️ Изменить")
+        self.edit_btn = QPushButton(self.tr("btn_edit_announcement"))
         self.edit_btn.clicked.connect(self.on_edit_clicked)
         btn_layout.addWidget(self.edit_btn)
 
-        self.delete_btn = QPushButton("🗑️ Удалить")
+        self.delete_btn = QPushButton(self.tr("btn_delete_announcement"))
         self.delete_btn.clicked.connect(self.on_delete_clicked)
         btn_layout.addWidget(self.delete_btn)
 
@@ -259,8 +264,8 @@ class AnnouncementSettingsDialog(QDialog):
         if 0 <= row < len(announcements):
             reply = QMessageBox.question(
                 self,
-                "Подтверждение удаления",
-                f"Удалить объявление '{announcements[row].get('file', '').split('/')[-1]}'?",
+                self.tr("confirm_delete_title"),
+                self.tr("confirm_delete_text").format(announcements[row].get('file', '').split('/')[-1]),
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
@@ -277,28 +282,30 @@ class AnnouncementEditDialog(QDialog):
     def __init__(self, parent, entry=None, config_manager=None):
         super().__init__(parent)
         
+        self._config = config_manager
+        self.current_locale = config_manager.get_locale() if hasattr(config_manager, 'get_locale') else 'ru'
+        
         if entry is None:
-            self.setWindowTitle("➕ Добавление объявления")
+            self.setWindowTitle(self.tr("ann_add_title"))
         else:
-            self.setWindowTitle("✏️ Редактирование объявления")
+            self.setWindowTitle(self.tr("ann_edit_title"))
         
         self.resize(500, 420)
         self.entry = entry or {}
-        self._config = config_manager
 
         layout = QVBoxLayout()
         self.setLayout(layout)
 
         # Выбор файла
-        file_group = QGroupBox("Аудиофайл")
+        file_group = QGroupBox(self.tr("ann_file_group"))
         file_layout = QHBoxLayout()
         file_group.setLayout(file_layout)
         
-        self.file_label = QLabel("Файл: не выбран")
+        self.file_label = QLabel(self.tr("ann_file_not_selected"))
         self.file_label.setWordWrap(True)
         file_layout.addWidget(self.file_label, 1)
         
-        self.select_file_btn = QPushButton("📁 Выбрать файл")
+        self.select_file_btn = QPushButton(self.tr("btn_select_file"))
         self.select_file_btn.clicked.connect(self.select_file)
         file_layout.addWidget(self.select_file_btn)
         
@@ -306,13 +313,13 @@ class AnnouncementEditDialog(QDialog):
         self.file_group = file_group  # Сохраняем ссылку для стилизации
 
         # Тип объявления (одноразовое/повторяющееся) - взаимоисключающие радиокнопки
-        type_group = QGroupBox("Тип объявления")
+        type_group = QGroupBox(self.tr("ann_mode_group"))
         type_layout = QVBoxLayout()
         type_group.setLayout(type_layout)
         
         self.type_button_group = QButtonGroup(self)
-        self.one_time_radio = QRadioButton("Одноразовое (по дате)")
-        self.repeat_radio = QRadioButton("Повторяющееся (по дням недели)")
+        self.one_time_radio = QRadioButton(self.tr("ann_one_time"))
+        self.repeat_radio = QRadioButton(self.tr("ann_repeat"))
         
         self.type_button_group.addButton(self.one_time_radio)
         self.type_button_group.addButton(self.repeat_radio)
@@ -326,7 +333,7 @@ class AnnouncementEditDialog(QDialog):
         layout.addWidget(type_group)
 
         # Дни недели для повторения
-        self.days_group = QGroupBox("Дни недели для повторения")
+        self.days_group = QGroupBox(self.tr("ann_days_label"))
         days_layout = QVBoxLayout()
         self.days_group.setLayout(days_layout)
         self.days_group.setEnabled(False)
@@ -342,7 +349,7 @@ class AnnouncementEditDialog(QDialog):
         layout.addWidget(self.days_group)
 
         # Дата с форматом "22 мая 2026"
-        self.date_group = QGroupBox("Дата")
+        self.date_group = QGroupBox(self.tr("ann_date_label"))
         date_layout = QHBoxLayout()
         self.date_group.setLayout(date_layout)
         
@@ -357,7 +364,7 @@ class AnnouncementEditDialog(QDialog):
         layout.addWidget(self.date_group)
 
         # Время - подставляем текущее + 5 минут
-        time_group = QGroupBox("Время")
+        time_group = QGroupBox(self.tr("ann_time_group"))
         time_layout = QHBoxLayout()
         time_group.setLayout(time_layout)
         
@@ -386,14 +393,14 @@ class AnnouncementEditDialog(QDialog):
 
         # Громкость
         self.volume_control = VolumeControl(
-            "Громкость объявления:",
+            self.tr("ann_volume"),
             self.config.get_volume("announcement"),
             self,
         )
         layout.addWidget(self.volume_control)
 
         # Активно
-        self.active_checkbox = QCheckBox("Активно")
+        self.active_checkbox = QCheckBox(self.tr("ann_active"))
         self.active_checkbox.setChecked(True)
         layout.addWidget(self.active_checkbox)
 
@@ -403,7 +410,7 @@ class AnnouncementEditDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         
-        self.cancel_btn = QPushButton("Отмена")
+        self.cancel_btn = QPushButton(self.tr("btn_cancel"))
         self.cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.cancel_btn)
         

@@ -72,6 +72,8 @@ class ConfigManager:
                 # Удаляем старый ключ если он есть и новый уже есть
                 if "announcement" in self.preferences and "announcements" in self.preferences:
                     del self.preferences["announcement"]
+
+                self._migrate_announcement_volume()
                 
                 return True
             except Exception as e:
@@ -84,6 +86,7 @@ class ConfigManager:
                             self.preferences = yaml.safe_load(f) or {}
                         print("Preferences restored from backup")
                         self._migrate_variants()
+                        self._migrate_announcement_volume()
                         return True
                     except Exception:
                         pass
@@ -108,6 +111,31 @@ class ConfigManager:
         
         if migrated:
             self.preferences["variants"] = variants
+
+    def _migrate_announcement_volume(self):
+        """Переносит ошибочно сохранённую громкость из объявлений в общие настройки."""
+        announcements = self.preferences.get("announcements", [])
+        if not isinstance(announcements, list):
+            return
+
+        moved_volume = None
+        for ann in announcements:
+            if not isinstance(ann, dict) or "volume" not in ann:
+                continue
+            if moved_volume is None:
+                moved_volume = ann.get("volume")
+            del ann["volume"]
+
+        if moved_volume is not None:
+            if not isinstance(self.preferences.get("volumes"), dict):
+                self.preferences["volumes"] = {}
+            if "announcement" not in self.preferences["volumes"]:
+                try:
+                    self.preferences["volumes"]["announcement"] = max(
+                        0, min(100, int(moved_volume))
+                    )
+                except (TypeError, ValueError):
+                    pass
 
     def save_preferences(self, prefs):
         try:
@@ -204,56 +232,6 @@ class ConfigManager:
 
     def set_locale(self, locale):
         self.preferences["locale"] = locale
-
-    # Методы для работы с профилями расписания
-    def get_profiles(self):
-        """Возвращает словарь профилей расписания"""
-        if self.schedule_data and "profiles" in self.schedule_data:
-            return self.schedule_data.get("profiles", {})
-        return DEFAULT_SCHEDULE.get("profiles", {})
-
-    def get_current_profile(self):
-        """Возвращает имя текущего профиля"""
-        if self.schedule_data:
-            return self.schedule_data.get("current_profile", "default")
-        return "default"
-
-    def set_current_profile(self, profile_name):
-        """Устанавливает текущий профиль"""
-        if self.schedule_data is None:
-            self.schedule_data = {}
-        self.schedule_data["current_profile"] = profile_name
-
-    def add_profile(self, profile_name, name_display, schedules):
-        """Добавляет новый профиль расписания"""
-        if self.schedule_data is None:
-            self.schedule_data = {}
-        if "profiles" not in self.schedule_data:
-            self.schedule_data["profiles"] = {}
-        # Если schedules пустой — берём текущие шаблоны как основу
-        if not schedules:
-            schedules = self.schedule_data.get("schedules", {})
-        self.schedule_data["profiles"][profile_name] = {
-            "name": name_display,
-            "schedules": schedules
-        }
-
-    def delete_profile(self, profile_name):
-        """Удаляет профиль (кроме default)"""
-        if profile_name == "default":
-            return False
-        if self.schedule_data and "profiles" in self.schedule_data:
-            if profile_name in self.schedule_data["profiles"]:
-                del self.schedule_data["profiles"][profile_name]
-                return True
-        return False
-
-    def get_profile_schedules(self, profile_name):
-        """Возвращает расписание для указанного профиля"""
-        profiles = self.get_profiles()
-        if profile_name in profiles:
-            return profiles[profile_name].get("schedules", {})
-        return {}
 
     # Методы для работы с громкостью
     def get_volumes(self):

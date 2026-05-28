@@ -18,7 +18,6 @@ hiddenimports = [
     'src.bell_settings_dialog',
     'src.schedule_editor_dialog',
     'src.templates_dialog',
-    'src.profiles_dialog',
     'src.announcement_settings_dialog',
     'src.anthem_settings_dialog',
     'src.gui',

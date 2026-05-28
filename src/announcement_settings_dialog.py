@@ -235,8 +235,9 @@ class AnnouncementSettingsDialog(QDialog):
                     data["file"],
                     data["date"],
                     data["time"],
-                    repeat_days=data.get("repeat_days", [])
+                    repeat_days=data.get("repeat_days", []),
                 )
+                self.config.set_volume("announcement", data["volume"])
                 self.config.save_preferences(self.config.preferences)
                 self.load_announcements()
                 self.table.selectRow(index)
@@ -256,7 +257,9 @@ class AnnouncementSettingsDialog(QDialog):
                 data = dialog.get_data()
                 if not data:
                     return  # Пользователь отменил или нет файла
+                announcement_volume = data.pop("volume")
                 self.config.update_announcement(row, **data)
+                self.config.set_volume("announcement", announcement_volume)
                 self.config.save_preferences(self.config.preferences)
                 self.load_announcements()
 
@@ -512,6 +515,8 @@ class AnnouncementEditDialog(QDialog):
         except ValueError:
             pass
         
+        self.volume_control.set_value(self.config.get_volume("announcement"))
+
         enabled = self.entry.get("enabled", True)
         self.active_checkbox.setChecked(enabled)
 

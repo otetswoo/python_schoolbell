@@ -83,12 +83,6 @@ DEFAULT_SCHEDULE = {
         "folder": str(MUSIC_DIR),
         "delay_minutes": 2
     },
-    "profiles": {
-        "default": {
-            "name": "Стандартное"
-        }
-    },
-    "current_profile": "default",
     "volumes": {
         "start": 100,
         "end": 100,

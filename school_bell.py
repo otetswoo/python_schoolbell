@@ -286,6 +286,8 @@ class SchoolBell(QMainWindow):
         # Группа громкости
         self.volumeGroup = QGroupBox(self.tr("volume_group", "Volume"))
         self.volumeLayout = QHBoxLayout(self.volumeGroup)
+        self.volumeLayout.setSpacing(10)
+        self.volumeGroup.setMaximumHeight(170)
         main_layout.addWidget(self.volumeGroup)
         
         # Панель кнопок управления
@@ -373,10 +375,20 @@ class SchoolBell(QMainWindow):
         self.announcement_checkbox.setChecked(self.announcement_enabled)
         self.announcement_checkbox.stateChanged.connect(self.on_announcement_toggled)
 
-        # Создаем контролы громкости
+        # Создаем компактные вертикальные контролы громкости
         self.volume_controls = {}
-        self._create_volume_control(self.volumeLayout, "bell", self.config.get_volume("start"))
-        self._create_volume_control(self.volumeLayout, "music", self.config.get_volume("music"))
+        for volume_type, config_key in (
+            ("bell", "start"),
+            ("music", "music"),
+            ("anthem", "anthem"),
+            ("announcement", "announcement"),
+        ):
+            self._create_volume_control(
+                self.volumeLayout,
+                volume_type,
+                self.config.get_volume(config_key),
+            )
+        self.volumeLayout.addStretch()
 
         # Подключаем кнопки
         self.edit_btn.clicked.connect(self.edit_schedule)
@@ -403,7 +415,7 @@ class SchoolBell(QMainWindow):
 
     def _create_volume_control(self, parent_layout, volume_type, value):
         """Создает подписанный ползунок громкости для главного окна."""
-        control = VolumeControl(self.tr(f"volume_{volume_type}"), value, self)
+        control = VolumeControl(self.tr(f"volume_{volume_type}"), value, self, Qt.Vertical)
         control.value_changed.connect(
             lambda new_value, vt=volume_type: self.on_volume_changed(vt, new_value)
         )
@@ -492,6 +504,7 @@ class SchoolBell(QMainWindow):
             self.config.save_schedule(self.config.schedule_data)
             self.config.save_preferences(self.config.preferences)
             self.load_data()
+            self._sync_volume_controls_from_config()
             self._retranslate_ui()
             QMessageBox.information(self, "OK", self.tr("import_settings_done", "Settings imported successfully"))
         except Exception as e:
@@ -502,12 +515,28 @@ class SchoolBell(QMainWindow):
         if volume_type == "bell":
             self.config.set_volume("start", value)
             self.config.set_volume("end", value)
-            self.sound_player.set_volume(value)
+            if self.sound_player.is_playing("start") or self.sound_player.is_playing("end"):
+                self.sound_player.set_volume(value)
         else:
             self.config.set_volume(volume_type, value)
-            if volume_type == "music" and self.sound_player.is_playing("music"):
+            if self.sound_player.is_playing(volume_type):
                 self.sound_player.set_volume(value)
         self.config.save_preferences(self.config.preferences)
+
+    def _sync_volume_controls_from_config(self):
+        """Синхронизирует ползунки главного окна с сохранёнными настройками громкости."""
+        if not hasattr(self, "volume_controls"):
+            return
+
+        for volume_type, config_key in (
+            ("bell", "start"),
+            ("music", "music"),
+            ("anthem", "anthem"),
+            ("announcement", "announcement"),
+        ):
+            control = self.volume_controls.get(volume_type)
+            if control:
+                control.set_value(self.config.get_volume(config_key))
 
     def _create_menu(self):
         """Создает меню программно"""
@@ -557,11 +586,8 @@ class SchoolBell(QMainWindow):
         self.menuSettings.addAction(self.actionAnnouncement)
         self.menuSettings.addAction(self.actionTemplates)
         self.menuSettings.addSeparator()
-        self.actionProfiles = QAction(
-            self.tr("action_profiles", "Профили расписания..."), self)
         self.actionLog = QAction(
             self.tr("action_log", "Журнал событий..."), self)
-        self.menuSettings.addAction(self.actionProfiles)
         self.menuSettings.addAction(self.actionLog)
         self.menuSettings.addMenu(self.menuLanguage)
         menubar.addMenu(self.menuSettings)
@@ -590,7 +616,6 @@ class SchoolBell(QMainWindow):
         self.actionAnnouncement.triggered.connect(self.show_announcement_settings)
         self.actionTemplates.triggered.connect(self.show_templates_editor)
         self.actionLog.triggered.connect(self.show_log_viewer)
-        self.actionProfiles.triggered.connect(self.show_profiles_dialog)
         self.actionLocaleRu.triggered.connect(lambda: self.set_locale("ru"))
         self.actionLocaleEn.triggered.connect(lambda: self.set_locale("en"))
         self.actionAbout.triggered.connect(self.show_about)
@@ -643,11 +668,8 @@ class SchoolBell(QMainWindow):
         if music.get("enabled") and folders:
             self.music_player.set_music_folders(folders)
 
-        # Загружаем шаблоны из текущего профиля
-        current_profile = self.config.get_current_profile()
-        templates = self.config.get_profile_schedules(current_profile)
-        if not templates:
-            templates = self.config.schedule_data.get("schedules", DEFAULT_SCHEDULE["schedules"])
+        # Загружаем единые шаблоны расписания.
+        templates = self.config.schedule_data.get("schedules", DEFAULT_SCHEDULE["schedules"])
 
         for key in WEEK_DAYS:
             self.schedule_variants[key] = {
@@ -1323,6 +1345,7 @@ class SchoolBell(QMainWindow):
         dlg = AnthemSettingsDialog(self, self.config)
         if dlg.exec() == QDialog.Accepted:
             self.config.save_preferences(self.config.preferences)
+            self._sync_volume_controls_from_config()
 
     def show_announcement_settings(self):
         """Открыть диалог настройки объявлений"""
@@ -1330,18 +1353,13 @@ class SchoolBell(QMainWindow):
         dlg = AnnouncementSettingsDialog(self, self.config)
         if dlg.exec() == QDialog.Accepted:
             self.config.save_preferences(self.config.preferences)
+            self._sync_volume_controls_from_config()
             self._update_announcement_ui_state()
 
     def show_log_viewer(self):
         """Открыть диалог просмотра журнала событий"""
         from src.log_viewer_dialog import LogViewerDialog
         dlg = LogViewerDialog(self, self.logger)
-        dlg.exec()
-
-    def show_profiles_dialog(self):
-        """Открыть диалог управления профилями расписания"""
-        from src.profiles_dialog import ProfilesDialog
-        dlg = ProfilesDialog(self, self.config, self)
         dlg.exec()
 
     def set_locale(self, locale):
@@ -1391,7 +1409,6 @@ class SchoolBell(QMainWindow):
         self.actionAnnouncement.setText(texts["action_announcement"])
         self.actionTemplates.setText(texts["action_templates"])
         self.actionLog.setText(texts["action_log"])
-        self.actionProfiles.setText(texts["action_profiles"])
         self.menuLanguage.setTitle(texts["menu_language"])
         self.actionLocaleRu.setText(texts["action_locale_ru"])
         self.actionLocaleEn.setText(texts["action_locale_en"])
@@ -1663,8 +1680,11 @@ class SchoolBell(QMainWindow):
             return
         
         self.sound_player.stop_all()
-        announcement_volume = self.config.get_volume("announcement")
-        if self.sound_player.play(str(announcement_path), "announcement", volume=announcement_volume):
+        if self.sound_player.play(
+            str(announcement_path),
+            "announcement",
+            volume=self.config.get_volume("announcement"),
+        ):
             self._clear_main_window_message()
             self.statusLabel.setText(
                 f"📢 {self.tr('btn_announcement').replace('📢', '').strip()}!"

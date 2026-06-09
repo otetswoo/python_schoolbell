@@ -131,6 +131,13 @@ class AnnouncementSelectDialog(QDialog):
 
 
 class SchoolBell(QMainWindow):
+    _BUTTON_CONFIG = {
+        "bell":         ("btn_bell",         "🔔", "bells_enabled"),
+        "music":        ("btn_music",        "🎵", "music_enabled"),
+        "anthem":       ("btn_anthem",       "🎼", "anthem_enabled"),
+        "announcement": ("btn_announcement", "📢", "announcement_enabled"),
+    }
+
     def __init__(self):
         super().__init__()
 
@@ -201,10 +208,15 @@ class SchoolBell(QMainWindow):
         self.music_player.check_music_finished()
 
     def _texts(self, locale=None):
-        """Возвращает локализацию с fallback на русский для новых/отсутствующих ключей."""
-        texts = LOCALIZATION.get("ru", {}).copy()
-        texts.update(LOCALIZATION.get(locale or self.current_locale, {}))
-        return texts
+        """Возвращает локализацию с fallback на русский.
+        Результат кэшируется по ключу локали."""
+        target = locale or self.current_locale
+        if getattr(self, '_texts_cache_locale', None) != target:
+            merged = LOCALIZATION.get("ru", {}).copy()
+            merged.update(LOCALIZATION.get(target, {}))
+            self._texts_cache = merged
+            self._texts_cache_locale = target
+        return self._texts_cache
 
     def tr(self, key, fallback=None):
         """Безопасно возвращает строку интерфейса без KeyError при старых настройках локализации."""
@@ -400,10 +412,10 @@ class SchoolBell(QMainWindow):
         self.stop_btn.clicked.connect(self.manual_stop)
         
         # Обновляем текст кнопок
-        self.bell_btn.setText("▶️ " + self.tr("btn_bell").replace("🔔", "").strip())
-        self.music_btn.setText("▶️ " + self.tr("btn_music").replace("🎵", "").strip())
-        self.anthem_btn.setText(self._get_anthem_button_text())
-        self.announcement_btn.setText(self._get_announcement_button_text())
+        self.bell_btn.setText(self._get_button_text("bell"))
+        self.music_btn.setText(self._get_button_text("music"))
+        self.anthem_btn.setText(self._get_button_text("anthem"))
+        self.announcement_btn.setText(self._get_button_text("announcement"))
         
         # Обновляем статус
         self.statusLabel.setText(self.tr("status_ready"))
@@ -1299,7 +1311,7 @@ class SchoolBell(QMainWindow):
                 self.load_data()
                 self.set_today_schedule()
             except Exception as e:
-                QMessageBox.critical(self, "Ошибка", str(e))
+                QMessageBox.critical(self, self.tr("error_title", "Ошибка"), str(e))
 
     def save_schedule(self):
         fname, _ = QFileDialog.getSaveFileName(self, "Сохранить расписание", str(SCHEDULE_PATH), "YAML (*.yml *.yaml)")
@@ -1320,7 +1332,7 @@ class SchoolBell(QMainWindow):
                 with open(fname, "w", encoding="utf-8") as f:
                     yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
             except Exception as e:
-                QMessageBox.critical(self, "Ошибка", str(e))
+                QMessageBox.critical(self, self.tr("error_title", "Ошибка"), str(e))
 
     def show_bell_settings(self):
         dlg = BellSettingsDialog(self, self.sounds, self.current_locale)
@@ -1364,6 +1376,7 @@ class SchoolBell(QMainWindow):
 
     def set_locale(self, locale):
         self.current_locale = locale
+        self._texts_cache_locale = None  # сброс кэша при смене языка
         self.config.set_locale(locale)
         self.config.save_preferences(self.config.preferences)
 
@@ -1386,10 +1399,10 @@ class SchoolBell(QMainWindow):
             control.set_title(texts[f"volume_{volume_type}"])
 
         self.today_btn.setText(texts["btn_today"])
-        self.bell_btn.setText(self._get_bell_button_text())
-        self.music_btn.setText(self._get_music_button_text())
-        self.anthem_btn.setText(self._get_anthem_button_text())
-        self.announcement_btn.setText(self._get_announcement_button_text())
+        self.bell_btn.setText(self._get_button_text("bell"))
+        self.music_btn.setText(self._get_button_text("music"))
+        self.anthem_btn.setText(self._get_button_text("anthem"))
+        self.announcement_btn.setText(self._get_button_text("announcement"))
         self.stop_btn.setText(texts["btn_stop"])
 
         headers = [self.tr("col_start", "Start"), self.tr("col_end", "End"), self.tr("col_break", "Break")]
@@ -1437,7 +1450,7 @@ class SchoolBell(QMainWindow):
                 "missing_bell_sound",
                 "Мелодия звонка не выбрана. Выберите звук в настройках.",
             )
-        self.bell_btn.setText(self._get_bell_button_text())
+        self.bell_btn.setText(self._get_button_text("bell"))
 
     def on_music_toggled(self, state):
         self.music_enabled = (state != 0)
@@ -1459,7 +1472,7 @@ class SchoolBell(QMainWindow):
                 )
             else:
                 self._clear_main_window_message()
-        self.music_btn.setText(self._get_music_button_text())
+        self.music_btn.setText(self._get_button_text("music"))
 
     def on_anthem_toggled(self, state):
         self.anthem_enabled = (state != 0)
@@ -1474,7 +1487,7 @@ class SchoolBell(QMainWindow):
                     "missing_anthem_file",
                     "Файл гимна не выбран или не найден. Выберите файл в настройках.",
                 )
-        self.anthem_btn.setText(self._get_anthem_button_text())
+        self.anthem_btn.setText(self._get_button_text("anthem"))
 
     def on_announcement_toggled(self, state):
         self.announcement_enabled = (state != 0)
@@ -1505,7 +1518,7 @@ class SchoolBell(QMainWindow):
         # Устанавливаем флаг announcement_enabled если есть активные объявления
         self.announcement_enabled = has_active
         self.announcement_checkbox.setChecked(has_active)
-        self.announcement_btn.setText(self._get_announcement_button_text())
+        self.announcement_btn.setText(self._get_button_text("announcement"))
 
     def manual_bell(self):
         path = self._get_sound_path("start")
@@ -1765,35 +1778,12 @@ class SchoolBell(QMainWindow):
             except Exception as e:
                 self.logger.log_event("error", f"Error checking announcement: {e}")
 
-    def _get_announcement_button_text(self):
-        """Возвращает текст кнопки объявления в зависимости от состояния."""
-        btn_text = self.tr("btn_announcement").replace("📢", "").strip()
-        if self.announcement_enabled:
-            return "▶️ " + btn_text
-        else:
-            return "⏸️ " + btn_text
-
-    def _get_bell_button_text(self):
-        btn_text = self.tr("btn_bell").replace("🔔", "").strip()
-        if self.bells_enabled:
-            return "▶️ " + btn_text
-        else:
-            return "⏸️ " + btn_text
-
-    def _get_music_button_text(self):
-        btn_text = self.tr("btn_music").replace("🎵", "").strip()
-        if self.music_enabled:
-            return "▶️ " + btn_text
-        else:
-            return "⏸️ " + btn_text
-
-    def _get_anthem_button_text(self):
-        """Возвращает текст кнопки гимна в зависимости от состояния"""
-        btn_text = self.tr("btn_anthem").replace("🎼", "").strip()
-        if self.anthem_enabled:
-            return "▶️ " + btn_text
-        else:
-            return "⏸️ " + btn_text
+    def _get_button_text(self, kind: str) -> str:
+        """Возвращает текст кнопки с учётом текущего состояния включения."""
+        tr_key, emoji, flag_attr = self._BUTTON_CONFIG[kind]
+        text = self.tr(tr_key).replace(emoji, "").strip()
+        enabled = getattr(self, flag_attr, False)
+        return ("▶️ " if enabled else "⏸️ ") + text
 
     def _on_music_finished(self):
         """Вызывается когда музыка закончилась - очищает статус трека."""
@@ -1923,10 +1913,10 @@ class SchoolBell(QMainWindow):
     def _cleanup_resources(self):
         """Корректно освобождает ресурсы Qt-объектов при закрытии приложения."""
         # Останавливаем все таймеры
-        if hasattr(self, 'ui_timer'):
-            self.ui_timer.stop()
-        if hasattr(self, 'bell_timer'):
-            self.bell_timer.stop()
+        for attr in ('ui_timer', 'bell_timer', 'music_check_timer'):
+            timer = getattr(self, attr, None)
+            if timer:
+                timer.stop()
         
         # Останавливаем воспроизведение и освобождаем ресурсы через cleanup()
         self.sound_player.cleanup()

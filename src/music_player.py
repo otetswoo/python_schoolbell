@@ -78,6 +78,7 @@ class MusicPlayer:
         """Остановка музыки через общий SoundPlayer"""
         if self.sound_player:
             self.sound_player.stop_all()
+        self._was_playing = False  # сброс флага, чтобы не вызвать callback
     
     def check_music_finished(self):
         """Проверяет, закончилась ли музыка, и уведомляет через callback."""

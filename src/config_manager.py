@@ -25,7 +25,12 @@ class ConfigManager:
         if SCHEDULE_PATH.exists():
             try:
                 with open(SCHEDULE_PATH, "r", encoding="utf-8") as f:
-                    self.schedule_data = yaml.safe_load(f) or {}
+                    loaded = yaml.safe_load(f) or {}
+                if not self._validate_schedule(loaded):
+                    print("Warning: schedule.yml has invalid structure, using defaults")
+                    self.schedule_data = deepcopy(DEFAULT_SCHEDULE)
+                    return False
+                self.schedule_data = loaded
                 return True
             except Exception as e:
                 print(f"Error loading schedule: {e}")
@@ -34,6 +39,24 @@ class ConfigManager:
         else:
             self.schedule_data = deepcopy(DEFAULT_SCHEDULE)
             return True
+
+    def _validate_schedule(self, data: dict) -> bool:
+        """Проверяет базовую структуру данных расписания.
+        Возвращает False только при явно некорректной структуре
+        (например, если schedules — не словарь, или урок — не словарь).
+        Пустые варианты (none: []) считаются допустимыми."""
+        if not isinstance(data, dict):
+            return False
+        schedules = data.get("schedules", {})
+        if not isinstance(schedules, dict):
+            return False
+        for variant_lessons in schedules.values():
+            if not isinstance(variant_lessons, list):
+                return False
+            for lesson in variant_lessons:
+                if not isinstance(lesson, dict):
+                    return False
+        return True
 
     def save_schedule(self, data, path=None):
         path = path or SCHEDULE_PATH

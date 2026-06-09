@@ -34,6 +34,17 @@ class SoundPlayer(QObject):
             volume = self._normalize_volume(volume)
             self.stop_all()
 
+            # Отключаем сигналы и освобождаем старые Qt-объекты перед созданием новых
+            if self.player is not None:
+                try:
+                    self.player.mediaStatusChanged.disconnect()
+                    self.player.playbackStateChanged.disconnect()
+                except RuntimeError:
+                    pass
+                self.player.deleteLater()
+            if self.audio_output is not None:
+                self.audio_output.deleteLater()
+
             self.audio_output = QAudioOutput()
             self.audio_output.setVolume(volume / 100.0)
 
@@ -71,13 +82,14 @@ class SoundPlayer(QObject):
             self._clear_current()
 
     def _clear_current(self):
-        """Очищает текущее состояние, но НЕ вызывает deleteLater() сразу.
-        
-        deleteLater() должен вызываться только при закрытии приложения,
-        чтобы избежать проблем с повторным использованием объектов.
-        """
+        if self.current_type is None and self.current_path is None:
+            return
         self.current_type = None
         self.current_path = None
+        # Очищает текущее состояние, но НЕ вызывает deleteLater() сразу.
+        #
+        # deleteLater() должен вызываться только при закрытии приложения,
+        # чтобы избежать проблем с повторным использованием объектов.
         # Не обнуляем player и audio_output здесь - они нужны для проверки состояния
 
     def play(self, sound_path, sound_type="auto", volume=100):

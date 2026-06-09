@@ -301,6 +301,7 @@ class AnnouncementEditDialog(QDialog):
         
         self.resize(500, 420)
         self.entry = entry or {}
+        self._file_path = ""
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -481,6 +482,7 @@ class AnnouncementEditDialog(QDialog):
             return
         
         file_path = self.entry.get("file", "")
+        self._file_path = file_path
         if file_path:
             self.file_label.setText(f"Файл: {file_path}")
         
@@ -529,34 +531,32 @@ class AnnouncementEditDialog(QDialog):
             "Audio (*.wav *.mp3 *.ogg *.flac *.m4a *.wma)"
         )
         if path:
+            self._file_path = path
             self.file_label.setText(f"Файл: {path}")
 
     def get_data(self) -> dict:
         """Возвращает данные из диалога. Возвращает None если файл не выбран."""
-        file_path = self.file_label.text().replace("Файл: ", "")
-        if file_path == "не выбран" or not file_path:
-            # Показываем предупреждение, что файл не выбран
+        if not self._file_path:
             QMessageBox.warning(
                 self,
-                "Предупреждение",
-                "Необходимо выбрать аудиофайл для объявления."
+                self.l10n("warning_title", "Предупреждение"),
+                self.l10n("ann_file_required",
+                          "Необходимо выбрать аудиофайл для объявления.")
             )
             return None
-        
-        # Определяем дни повторения
+
         repeat_days = []
         if self.repeat_radio.isChecked():
             for day_key, cb in self.day_checkboxes.items():
                 if cb.isChecked():
                     repeat_days.append(day_key)
-        
-        # Для повторяющихся объявлений дата не нужна (или можно оставить пустой)
+
         date_str = ""
         if self.one_time_radio.isChecked():
             date_str = self.date_edit.date().toString("yyyy-MM-dd")
-        
+
         return {
-            "file": file_path,
+            "file": self._file_path,
             "date": date_str,
             "time": f"{self.hour_spin.value():02d}:{self.minute_spin.value():02d}",
             "enabled": self.active_checkbox.isChecked(),

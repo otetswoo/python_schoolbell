@@ -227,7 +227,10 @@ class ConfigManager:
         clean = [f for f in (folders or []) if f]
         self.preferences["music"]["folders"] = clean
         self.preferences["music"]["folder"] = clean[0] if clean else ""
-        self.preferences["music"]["enabled"] = bool(clean)
+        if clean:
+            self.preferences["music"].setdefault("enabled", True)
+        else:
+            self.preferences["music"]["enabled"] = False
 
     def get_anthem_settings(self):
         anthem = self.preferences.get("anthem", {})

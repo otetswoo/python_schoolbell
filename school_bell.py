@@ -177,9 +177,12 @@ class SchoolBell(QMainWindow):
         anthem_settings = self.config.get_anthem_settings()
         self.anthem_enabled = anthem_settings.get("enabled", False)
 
-        # Состояние объявлений должно быть инициализировано до init_ui,
-        # т.к. чекбокс использует его при первом построении интерфейса.
-        self.announcement_enabled = len(self.config.get_active_announcements()) > 0
+        # Глобальный переключатель автозапуска объявлений работает независимо
+        # от чекбоксов отдельных объявлений в настройках.
+        self.announcement_enabled = self.config.preferences.get(
+            "announcements_enabled",
+            len(self.config.get_active_announcements()) > 0,
+        )
 
         # Настройки системного трея
         self.tray_icon = None
@@ -237,12 +240,12 @@ class SchoolBell(QMainWindow):
         content_layout = QHBoxLayout()
         content_layout.setSpacing(6)
         
-        # === ЛЕВАЯ ПАНЕЛЬ: Кнопки управления и чекбоксы ===
+        # === ЛЕВАЯ ПАНЕЛЬ: Кнопки навигации ===
         controls_frame = QFrame()
         controls_layout = QVBoxLayout(controls_frame)
         controls_layout.setSpacing(6)
-        controls_frame.setMinimumWidth(160)
-        controls_frame.setMaximumWidth(160)
+        controls_frame.setMinimumWidth(150)
+        controls_frame.setMaximumWidth(150)
         
         # Кнопки Edit и Today
         self.edit_btn = QPushButton(self.tr("btn_edit", "Edit"))
@@ -253,21 +256,6 @@ class SchoolBell(QMainWindow):
         self.today_btn.setMinimumHeight(30)
         self.today_btn.setToolTip(self.tr("navigate_to_current_day", "Navigate to current day"))
         controls_layout.addWidget(self.today_btn)
-        
-        controls_layout.addSpacing(8)
-        
-        # Чекбоксы
-        self.bells_checkbox = QCheckBox(self.tr("chk_bells", "Bells"))
-        controls_layout.addWidget(self.bells_checkbox)
-        
-        self.music_checkbox = QCheckBox(self.tr("chk_music", "Music"))
-        controls_layout.addWidget(self.music_checkbox)
-        
-        self.anthem_checkbox = QCheckBox(self.tr("chk_anthem", "Anthem"))
-        controls_layout.addWidget(self.anthem_checkbox)
-        
-        self.announcement_checkbox = QCheckBox(self.tr("chk_announcement", "Announcement"))
-        controls_layout.addWidget(self.announcement_checkbox)
         
         controls_layout.addStretch()
         
@@ -298,8 +286,8 @@ class SchoolBell(QMainWindow):
         # Группа громкости
         self.volumeGroup = QGroupBox(self.tr("volume_group", "Volume"))
         self.volumeLayout = QHBoxLayout(self.volumeGroup)
-        self.volumeLayout.setSpacing(10)
-        self.volumeGroup.setMaximumHeight(170)
+        self.volumeLayout.setSpacing(12)
+        self.volumeGroup.setMaximumHeight(185)
         main_layout.addWidget(self.volumeGroup)
         
         # Панель кнопок управления
@@ -372,34 +360,43 @@ class SchoolBell(QMainWindow):
         # Создаем меню вручную
         self._create_menu()
 
-        # Подключаем чекбоксы
-        self.bells_checkbox.setChecked(self.bells_enabled)
-        self.bells_checkbox.stateChanged.connect(self.on_bells_toggled)
-        
-        music_settings = self.config.get_music_settings()
-        self.music_checkbox.setChecked(music_settings.get("enabled", False))
-        self.music_checkbox.stateChanged.connect(self.on_music_toggled)
-        
-        anthem_settings = self.config.get_anthem_settings()
-        self.anthem_checkbox.setChecked(anthem_settings.get("enabled", False))
-        self.anthem_checkbox.stateChanged.connect(self.on_anthem_toggled)
-        
-        self.announcement_checkbox.setChecked(self.announcement_enabled)
-        self.announcement_checkbox.stateChanged.connect(self.on_announcement_toggled)
-
-        # Создаем компактные вертикальные контролы громкости
+        # Создаем компактные пары чекбокс + ползунок громкости.
         self.volume_controls = {}
-        for volume_type, config_key in (
-            ("bell", "start"),
-            ("music", "music"),
-            ("anthem", "anthem"),
-            ("announcement", "announcement"),
-        ):
-            self._create_volume_control(
-                self.volumeLayout,
-                volume_type,
-                self.config.get_volume(config_key),
-            )
+        self.playback_checkboxes = {}
+        self._create_playback_volume_control(
+            self.volumeLayout,
+            "bell",
+            "start",
+            self.bells_enabled,
+            self.on_bells_toggled,
+        )
+        music_settings = self.config.get_music_settings()
+        self._create_playback_volume_control(
+            self.volumeLayout,
+            "music",
+            "music",
+            music_settings.get("enabled", False),
+            self.on_music_toggled,
+        )
+        anthem_settings = self.config.get_anthem_settings()
+        self._create_playback_volume_control(
+            self.volumeLayout,
+            "anthem",
+            "anthem",
+            anthem_settings.get("enabled", False),
+            self.on_anthem_toggled,
+        )
+        self._create_playback_volume_control(
+            self.volumeLayout,
+            "announcement",
+            "announcement",
+            self.announcement_enabled,
+            self.on_announcement_toggled,
+        )
+        self.bells_checkbox = self.playback_checkboxes["bell"]
+        self.music_checkbox = self.playback_checkboxes["music"]
+        self.anthem_checkbox = self.playback_checkboxes["anthem"]
+        self.announcement_checkbox = self.playback_checkboxes["announcement"]
         self.volumeLayout.addStretch()
 
         # Подключаем кнопки
@@ -425,15 +422,70 @@ class SchoolBell(QMainWindow):
         self.setup_menu()
         self._apply_compact_style()
 
-    def _create_volume_control(self, parent_layout, volume_type, value):
-        """Создает подписанный ползунок громкости для главного окна."""
-        control = VolumeControl(self.tr(f"volume_{volume_type}"), value, self, Qt.Vertical)
+    def _create_playback_volume_control(self, parent_layout, volume_type, config_key, enabled, toggled_handler):
+        """Создает объединенный чекбокс автозапуска и ползунок громкости."""
+        container = QWidget(self.volumeGroup)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(4)
+
+        checkbox_key = "chk_bells" if volume_type == "bell" else f"chk_{volume_type}"
+        checkbox = QCheckBox(self.tr(checkbox_key))
+        checkbox.setChecked(enabled)
+        checkbox.stateChanged.connect(toggled_handler)
+        layout.addWidget(checkbox, alignment=Qt.AlignHCenter)
+
+        control = VolumeControl(
+            self.tr(f"volume_{volume_type}"),
+            self.config.get_volume(config_key),
+            self,
+            Qt.Vertical,
+            show_title=False,
+        )
         control.value_changed.connect(
             lambda new_value, vt=volume_type: self.on_volume_changed(vt, new_value)
         )
-        parent_layout.addWidget(control)
+        control.set_active(enabled)
+        layout.addWidget(control)
+
+        parent_layout.addWidget(container)
+        self.playback_checkboxes[volume_type] = checkbox
         self.volume_controls[volume_type] = control
 
+    def _set_playback_control_active(self, volume_type, active):
+        """Обновляет визуальное состояние ползунка без блокировки изменения громкости."""
+        control = getattr(self, "volume_controls", {}).get(volume_type)
+        if control:
+            control.set_active(active)
+
+    def _sync_playback_state_from_config(self):
+        """Синхронизирует чекбоксы и серое состояние ползунков с настройками."""
+        self.bells_enabled = self.config.preferences.get("bells", {}).get("enabled", True)
+        self.music_enabled = self.config.get_music_settings().get("enabled", False)
+        self.anthem_enabled = self.config.get_anthem_settings().get("enabled", False)
+        self.announcement_enabled = self.config.preferences.get(
+            "announcements_enabled",
+            self.announcement_enabled,
+        )
+
+        states = {
+            "bell": self.bells_enabled,
+            "music": self.music_enabled,
+            "anthem": self.anthem_enabled,
+            "announcement": self.announcement_enabled,
+        }
+        for volume_type, enabled in states.items():
+            checkbox = getattr(self, "playback_checkboxes", {}).get(volume_type)
+            if checkbox and checkbox.isChecked() != enabled:
+                checkbox.blockSignals(True)
+                checkbox.setChecked(enabled)
+                checkbox.blockSignals(False)
+            self._set_playback_control_active(volume_type, enabled)
+
+        self.bell_btn.setText(self._get_button_text("bell"))
+        self.music_btn.setText(self._get_button_text("music"))
+        self.anthem_btn.setText(self._get_button_text("anthem"))
+        self.announcement_btn.setText(self._get_button_text("announcement"))
 
     def _apply_compact_style(self):
         """Применяет компактный современный стиль интерфейса."""
@@ -517,6 +569,7 @@ class SchoolBell(QMainWindow):
             self.config.save_preferences(self.config.preferences)
             self.load_data()
             self._sync_volume_controls_from_config()
+            self._sync_playback_state_from_config()
             self._retranslate_ui()
             QMessageBox.information(self, "OK", self.tr("import_settings_done", "Settings imported successfully"))
         except Exception as e:
@@ -1169,25 +1222,6 @@ class SchoolBell(QMainWindow):
             return True
         return False
 
-    def play_bell(self, bell_type, event_time):
-        if not self.bells_enabled:
-            return
-
-        path = self._get_sound_path(bell_type)
-        if not path:
-            self._set_main_window_message(
-                "missing_bell_sound",
-                "Мелодия звонка не выбрана. Выберите звук в настройках.",
-            )
-            return
-
-        self._play_cached_audio(
-            bell_type,
-            event_time,
-            path,
-            self.config.get_volume(bell_type),
-        )
-
     def play_break_music(self, event_time=None):
         """Воспроизведение музыки на перемене."""
         if event_time:
@@ -1340,6 +1374,8 @@ class SchoolBell(QMainWindow):
             for bell_type in ("start", "end"):
                 self.config.set_sound(bell_type, self.sounds.get(bell_type, ""))
             self.config.save_preferences(self.config.preferences)
+            self._sync_volume_controls_from_config()
+            self._sync_playback_state_from_config()
             self.statusLabel.setText(self.tr("bell_settings_saved", "Bell melodies updated"))
 
     def show_music_settings(self):
@@ -1350,6 +1386,8 @@ class SchoolBell(QMainWindow):
             if folders:
                 self.music_player.set_music_folders(folders)
             self.config.save_preferences(self.config.preferences)
+            self._sync_volume_controls_from_config()
+            self._sync_playback_state_from_config()
 
     def show_anthem_settings(self):
         """Открыть диалог настройки гимна"""
@@ -1358,6 +1396,7 @@ class SchoolBell(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             self.config.save_preferences(self.config.preferences)
             self._sync_volume_controls_from_config()
+            self._sync_playback_state_from_config()
 
     def show_announcement_settings(self):
         """Открыть диалог настройки объявлений"""
@@ -1366,6 +1405,7 @@ class SchoolBell(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             self.config.save_preferences(self.config.preferences)
             self._sync_volume_controls_from_config()
+            self._sync_playback_state_from_config()
             self._update_announcement_ui_state()
 
     def show_log_viewer(self):
@@ -1450,6 +1490,7 @@ class SchoolBell(QMainWindow):
                 "missing_bell_sound",
                 "Мелодия звонка не выбрана. Выберите звук в настройках.",
             )
+        self._set_playback_control_active("bell", self.bells_enabled)
         self.bell_btn.setText(self._get_button_text("bell"))
 
     def on_music_toggled(self, state):
@@ -1472,6 +1513,7 @@ class SchoolBell(QMainWindow):
                 )
             else:
                 self._clear_main_window_message()
+        self._set_playback_control_active("music", self.music_enabled)
         self.music_btn.setText(self._get_button_text("music"))
 
     def on_anthem_toggled(self, state):
@@ -1487,37 +1529,32 @@ class SchoolBell(QMainWindow):
                     "missing_anthem_file",
                     "Файл гимна не выбран или не найден. Выберите файл в настройках.",
                 )
+        self._set_playback_control_active("anthem", self.anthem_enabled)
         self.anthem_btn.setText(self._get_button_text("anthem"))
 
     def on_announcement_toggled(self, state):
         self.announcement_enabled = (state != 0)
-        
-        # При включении сбрасываем played=False только для объявлений с датой >= сегодня
-        # или для повторяющихся объявлений
-        if self.announcement_enabled:
-            today = datetime.date.today().isoformat()
-            for index, ann in enumerate(self.config.get_announcements()):
-                ann_date = ann.get("date", "")
-                repeat_days = ann.get("repeat_days", [])
-                
-                # Для повторяющихся объявлений или объявлений с датой >= сегодня
-                if repeat_days or (ann_date and ann_date >= today):
-                    self.config.update_announcement(index, played=False, enabled=True)
-        
+        self.config.preferences["announcements_enabled"] = self.announcement_enabled
         self.config.save_preferences(self.config.preferences)
-        
-        # Обновляем UI состояние
+
+        if self.announcement_enabled and not self.config.get_active_announcements():
+            self._set_main_window_message(
+                "no_active_announcements",
+                "Нет активных объявлений для запуска. Добавьте объявление в настройках.",
+            )
+
         self._update_announcement_ui_state()
 
     def _update_announcement_ui_state(self):
-        """Обновляет состояние чекбокса и кнопки объявления."""
-        # Проверяем наличие активных объявлений
-        active_announcements = self.config.get_active_announcements()
-        has_active = len(active_announcements) > 0
-        
-        # Устанавливаем флаг announcement_enabled если есть активные объявления
-        self.announcement_enabled = has_active
-        self.announcement_checkbox.setChecked(has_active)
+        """Обновляет состояние глобального чекбокса и кнопки объявления."""
+        if (
+            hasattr(self, "announcement_checkbox")
+            and self.announcement_checkbox.isChecked() != self.announcement_enabled
+        ):
+            self.announcement_checkbox.blockSignals(True)
+            self.announcement_checkbox.setChecked(self.announcement_enabled)
+            self.announcement_checkbox.blockSignals(False)
+        self._set_playback_control_active("announcement", self.announcement_enabled)
         self.announcement_btn.setText(self._get_button_text("announcement"))
 
     def manual_bell(self):

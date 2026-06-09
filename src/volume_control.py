@@ -12,10 +12,18 @@ class VolumeControl(QWidget):
 
     value_changed = Signal(int)
 
-    def __init__(self, title, value, parent=None, orientation=Qt.Horizontal):
+    def __init__(
+        self,
+        title,
+        value,
+        parent=None,
+        orientation=Qt.Horizontal,
+        show_title=True,
+    ):
         super().__init__(parent)
 
         self.orientation = orientation
+        self._active = True
         if orientation == Qt.Vertical:
             layout = QVBoxLayout()
             label_alignment = Qt.AlignHCenter | Qt.AlignBottom
@@ -37,7 +45,9 @@ class VolumeControl(QWidget):
             self.title_label.setMaximumWidth(82)
         else:
             self.title_label.setMinimumWidth(100)
-        layout.addWidget(self.title_label)
+        self.title_label.setVisible(show_title)
+        if show_title:
+            layout.addWidget(self.title_label)
 
         self.slider = QSlider(orientation)
         self.slider.setRange(0, 100)
@@ -70,6 +80,35 @@ class VolumeControl(QWidget):
     def set_value(self, value):
         """Set the current volume value in percent."""
         self.slider.setValue(value)
+
+    def set_active(self, active):
+        """Dim the control when playback is disabled without disabling the slider."""
+        self._active = bool(active)
+        if self._active:
+            self.title_label.setStyleSheet("")
+            self.value_label.setStyleSheet("")
+            self.slider.setStyleSheet("")
+            return
+
+        muted_text = "color: #8a8f98;"
+        self.title_label.setStyleSheet(muted_text)
+        self.value_label.setStyleSheet(muted_text)
+        if self.orientation == Qt.Vertical:
+            groove = "QSlider::groove:vertical"
+            handle = "QSlider::handle:vertical"
+            add_page = "QSlider::add-page:vertical"
+            sub_page = "QSlider::sub-page:vertical"
+        else:
+            groove = "QSlider::groove:horizontal"
+            handle = "QSlider::handle:horizontal"
+            add_page = "QSlider::add-page:horizontal"
+            sub_page = "QSlider::sub-page:horizontal"
+        self.slider.setStyleSheet(f"""
+            {groove} {{ background: #d5d8dd; border-radius: 3px; }}
+            {sub_page} {{ background: #c5c9d0; border-radius: 3px; }}
+            {add_page} {{ background: #eceff3; border-radius: 3px; }}
+            {handle} {{ background: #9aa1aa; border: 1px solid #858b94; border-radius: 6px; }}
+        """)
 
     def _set_value_label(self, value):
         self.value_label.setText(f"{value}%")

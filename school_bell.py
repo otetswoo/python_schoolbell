@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor, QFont, QKeySequence, QIcon, QAction
 from PySide6.QtCore import Qt, QTimer
 
+from src.gui.ui_main_window import Ui_MainWindow
 from src.config import (
     WEEK_DAYS, WEEK_DAYS_RU, WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN, VERSION,
     DEFAULT_SCHEDULE, SCHEDULE_PATH, ensure_dirs
@@ -226,121 +227,34 @@ class SchoolBell(QMainWindow):
         return self._texts().get(key, fallback if fallback is not None else key)
 
     def init_ui(self):
-        # Создаем интерфейс программно
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setSpacing(6)
-        main_layout.setContentsMargins(8, 8, 8, 8)
+        # Используем сгенерированный UI файл через класс Ui_MainWindow
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
         
-        # Устанавливаем заголовок окна
+        # Маппинг имен из UI файла на существующие атрибуты для совместимости
+        self.edit_btn = self.ui.editBtn
+        self.today_btn = self.ui.todayBtn
+        self.scheduleTable = self.ui.scheduleTable
+        self.volumeGroup = self.ui.volumeGroup
+        self.volumeLayout = self.ui.volumeLayout
+        self.bell_btn = self.ui.bellBtn
+        self.music_btn = self.ui.musicBtn
+        self.anthem_btn = self.ui.anthemBtn
+        self.announcement_btn = self.ui.announcementBtn
+        self.stop_btn = self.ui.stopBtn
+        self.trackLabel = self.ui.trackLabel
+        self.statusLabel = self.ui.statusLabel
+        self.days_container = self.ui.daysContainer
+        self.days_layout = self.ui.daysLayout
+        
+        # Устанавливаем заголовок окна с локализацией
         self.setWindowTitle(self.tr("app_title"))
         
-        # Создаем основной горизонтальный layout (controls слева, table справа)
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(6)
-        
-        # === ЛЕВАЯ ПАНЕЛЬ: Кнопки навигации ===
-        controls_frame = QFrame()
-        controls_layout = QVBoxLayout(controls_frame)
-        controls_layout.setSpacing(6)
-        controls_frame.setMinimumWidth(150)
-        controls_frame.setMaximumWidth(150)
-        
-        # Кнопки Edit и Today
-        self.edit_btn = QPushButton(self.tr("btn_edit", "Edit"))
-        self.edit_btn.setMinimumHeight(30)
-        controls_layout.addWidget(self.edit_btn)
-        
-        self.today_btn = QPushButton(self.tr('btn_today'))
-        self.today_btn.setMinimumHeight(30)
-        self.today_btn.setToolTip(self.tr("navigate_to_current_day", "Navigate to current day"))
-        controls_layout.addWidget(self.today_btn)
-        
-        controls_layout.addStretch()
-        
-        # Добавляем левую панель в основной layout
-        content_layout.addWidget(controls_frame)
-        
-        # === ПРАВАЯ ПАНЕЛЬ: Таблица расписания ===
-        self.scheduleTable = QTableWidget()
-        self.scheduleTable.setMinimumWidth(300)
-        self.scheduleTable.setColumnCount(3)
-        self.scheduleTable.setHorizontalHeaderLabels([
-            self.tr("col_start", "Start"),
-            self.tr("col_end", "End"),
-            self.tr("col_break", "Break")
-        ])
+        # Настраиваем таблицу расписания
         self.scheduleTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.scheduleTable.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.scheduleTable.setSelectionMode(QTableWidget.NoSelection)
         self.scheduleTable.verticalHeader().setDefaultSectionSize(24)
-        self.scheduleTable.setAlternatingRowColors(True)
         
-        content_layout.addWidget(self.scheduleTable, stretch=1)
-        
-        main_layout.addLayout(content_layout, stretch=1)
-        
-        # === НИЖНЯЯ ЧАСТЬ: Громкость, кнопки, статус ===
-        
-        # Группа громкости
-        self.volumeGroup = QGroupBox(self.tr("volume_group", "Volume"))
-        self.volumeLayout = QHBoxLayout(self.volumeGroup)
-        self.volumeLayout.setSpacing(12)
-        self.volumeGroup.setMaximumHeight(185)
-        main_layout.addWidget(self.volumeGroup)
-        
-        # Панель кнопок управления
-        buttons_frame = QFrame()
-        bottom_layout = QHBoxLayout(buttons_frame)
-        bottom_layout.setSpacing(8)
-        
-        self.bell_btn = QPushButton()
-        self.bell_btn.setMinimumHeight(34)
-        bottom_layout.addWidget(self.bell_btn)
-        
-        self.music_btn = QPushButton()
-        self.music_btn.setMinimumHeight(34)
-        bottom_layout.addWidget(self.music_btn)
-        
-        self.anthem_btn = QPushButton()
-        self.anthem_btn.setMinimumHeight(34)
-        bottom_layout.addWidget(self.anthem_btn)
-        
-        self.announcement_btn = QPushButton()
-        self.announcement_btn.setMinimumHeight(34)
-        bottom_layout.addWidget(self.announcement_btn)
-        
-        self.stop_btn = QPushButton(self.tr("btn_stop", "Stop"))
-        self.stop_btn.setMinimumHeight(34)
-        self.stop_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
-        bottom_layout.addWidget(self.stop_btn)
-        
-        main_layout.addWidget(buttons_frame)
-        
-        # Метка для отображения текущего трека
-        self.trackLabel = QLabel("")
-        self.trackLabel.setMinimumHeight(20)
-        self.trackLabel.setStyleSheet("color: #1565c0; font-size: 11px; padding: 2px 8px;")
-        self.trackLabel.setVisible(False)
-        main_layout.addWidget(self.trackLabel)
-        
-        # Строка статуса
-        self.statusLabel = QLabel(self.tr("status_ready", "Ready"))
-        self.statusLabel.setMinimumHeight(50)
-        self.statusLabel.setStyleSheet("background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
-        self.statusLabel.setWordWrap(True)
-        main_layout.addWidget(self.statusLabel)
-        
-        # Создаем контейнер для кнопок дней недели
-        days_container = QWidget()
-        self.days_layout = QHBoxLayout(days_container)
-        self.days_layout.setSpacing(5)
-        days_container.setMaximumHeight(42)
-        
-        # Вставляем кнопки дней недели над основным контентом
-        main_layout.insertWidget(0, days_container)
-        
+        # Создаем контейнер для кнопок дней недели (уже существует в UI)
         # Инициализируем кнопки дней недели
         self.day_buttons = {}
         for i, (short_ru, short_en) in enumerate(zip(WEEK_DAYS_SHORT, WEEK_DAYS_SHORT_EN)):
@@ -413,6 +327,7 @@ class SchoolBell(QMainWindow):
         self.music_btn.setText(self._get_button_text("music"))
         self.anthem_btn.setText(self._get_button_text("anthem"))
         self.announcement_btn.setText(self._get_button_text("announcement"))
+        self.stop_btn.setText(self.tr("btn_stop", "Stop"))
         
         # Обновляем статус
         self.statusLabel.setText(self.tr("status_ready"))

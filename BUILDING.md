@@ -1,142 +1,194 @@
-# 📦 Building Installers / Сборка установщиков
+# Сборка School Bell для Linux
 
-This guide explains how to build DEB (Linux) and MSI (Windows) installers for School Bell.
+Версия приложения берётся из `src/config.py` (`VERSION`). Все Linux-пакеты
+собираются в `dist/` и не содержат пользовательских настроек, журналов,
+музыки и других локальных файлов.
 
-Это руководство объясняет, как создать установщики DEB (Linux) и MSI (Windows) для School Bell.
+```
+dist/
+├── SchoolBell_<version>_all.deb
+├── SchoolBell_<version>_noarch.rpm
+└── SchoolBell_<version>_x86_64.AppImage
+```
 
----
+Общие функции находятся в `build_scripts/build_common.sh`: определение версии,
+копирование только ресурсов приложения, создание `.desktop` и установка значка.
+Скрипты можно запускать из любого каталога; они сами находят корень проекта.
 
-## 🐧 Building DEB Package (Linux - Debian/Ubuntu)
+## Пользовательские данные
 
-### Prerequisites / Требования
+Пакеты не содержат `preferences.yml`, `logs/`, `music/` и не изменяют
+пользовательские настройки при установке или обновлении. Установленная
+программа хранит данные в:
+
+```
+$XDG_DATA_HOME/school-bell/   (если XDG_DATA_HOME задан)
+~/.local/share/school-bell/  (по умолчанию)
+```
+
+Внутри создаются `preferences.yml`, `schedule.yml`, `music/` и `logs/`.
+Звуки и расписание по умолчанию остаются в read-only каталоге приложения.
+
+## 1. DEB (Debian/Ubuntu)
+
+### Инструменты сборки
 
 ```bash
-# Install required tools
 sudo apt-get update
-sudo apt-get install -y dpkg-dev fakeroot
+sudo apt-get install -y dpkg-dev fakeroot desktop-file-utils
 ```
 
-### Build Steps / Шаги сборки
+Для проверки пакета полезны `lintian` и чистая виртуальная машина Debian/Ubuntu.
 
-1. **Navigate to project root:**
-   ```bash
-   cd /path/to/school_bell
-   ```
-
-2. **Run the build script:**
-   ```bash
-   bash build_scripts/build_deb.sh [version]
-   ```
-   
-   Example:
-   ```bash
-   bash build_scripts/build_deb.sh 1.0.0
-   ```
-
-3. **Install the package:**
-   ```bash
-   sudo dpkg -i build/deb/school-bell_1.0.0_all.deb
-   sudo apt-get install -f  # Fix dependencies if needed
-   ```
-
-### Uninstall / Удаление
+### Сборка
 
 ```bash
-sudo apt remove school-bell
+cd /path/to/school_bell
+bash build_scripts/build_deb.sh
 ```
 
-### What's Included / Что включено
+Результат: `dist/SchoolBell_<version>_all.deb`.
 
-- Application files in `/opt/school-bell/`
-- Desktop entry for applications menu
-- Command-line launcher (`school-bell`)
-- Automatic dependency resolution for Python 3, PySide6, and PyYAML
+Пакет устанавливается в `/usr/share/school-bell`, launcher — в
+`/usr/bin/school-bell`, desktop-файл и значок — в стандартные каталоги
+`/usr/share`.
 
----
+### Зависимости Debian
 
-## 🪟 Building MSI Package (Windows)
+`python3`, `python3-pyside6.qtcore`, `python3-pyside6.qtgui`,
+`python3-pyside6.qtwidgets`, `python3-pyside6.qtmultimedia`, `python3-yaml`.
 
-### Prerequisites / Требования
+### Проверка
 
-1. **Python 3.8+** installed
-2. **Install cx_Freeze:**
-   ```cmd
-   pip install cx-Freeze
-   ```
-
-### Build Steps / Шаги сборки
-
-1. **Navigate to project root:**
-   ```cmd
-   cd C:\path\to\school_bell
-   ```
-
-2. **Build the MSI:**
-   ```cmd
-   python build_scripts\build_msi.py bdist_msi
-   ```
-
-3. **Find the installer:**
-   The MSI file will be created in the `dist\` directory.
-
-### Alternative: Build EXE only / Альтернатива: только EXE
-
-```cmd
-python build_scripts\build_msi.py build_exe
-```
-
-### Customization / Настройка
-
-Edit `build_scripts/build_msi.py` to:
-- Change application icon (add `.ico` file)
-- Modify included files
-- Adjust package metadata
-
----
-
-## 📝 Notes / Примечания
-
-### For DEB Package:
-- The package installs to `/opt/school-bell/`
-- A symlink is created at `/usr/bin/school-bell`
-- Desktop entry appears in the applications menu
-- Dependencies are automatically handled by apt
-
-### For MSI Package:
-- Requires Windows environment
-- cx_Freeze bundles Python interpreter with the app
-- Creates desktop shortcut automatically
-- All dependencies are included in the installer
-
----
-
-## 🔧 Troubleshooting / Решение проблем
-
-### DEB Build Fails
 ```bash
-# Ensure you have proper permissions
-chmod +x build_scripts/build_deb.sh
-
-# Check if fakeroot is installed
-which fakeroot
+dpkg-deb -I dist/SchoolBell_<version>_all.deb
+dpkg-deb -c dist/SchoolBell_<version>_all.deb
+sudo dpkg -i dist/SchoolBell_<version>_all.deb
+sudo apt-get install -f
+school-bell
 ```
 
-### MSI Build Fails
-```cmd
-# Reinstall cx_Freeze
-pip uninstall cx-Freeze
-pip install cx-Freeze
+Удаление: `sudo apt remove school-bell`. Пользовательские данные в
+`~/.local/share/school-bell` при удалении не стираются.
 
-# Clean previous builds
-rmdir /s /q build dist
+## 2. RPM (ALT Linux)
+
+### Инструменты сборки
+
+В ALT Linux:
+
+```bash
+sudo apt-get install -y rpm-build
 ```
 
-### Missing Dependencies
-- **Linux:** `sudo apt-get install python3-pyside6.qtcore python3-pyside6.qtgui python3-pyside6.qtwidgets python3-yaml`
-- **Windows:** Already bundled by cx_Freeze
+`rpmbuild` должен быть доступен в `PATH`. Сборка выполняется от обычного
+пользователя; root не требуется.
 
----
+### Сборка
 
-## 📄 License / Лицензия
+```bash
+cd /path/to/school_bell
+bash build_scripts/build_rpm.sh
+```
 
-MIT License
+Скрипт создаёт чистый tar-архив без `preferences.yml`, `logs/`, `music/`,
+`build/` и `.git`, затем запускает `rpmbuild`. Результат:
+`dist/SchoolBell_<version>_noarch.rpm`.
+
+### Зависимости ALT Linux
+
+- `python3`
+- `python3-module-pyside6` — включает Python-модуль Qt Multimedia и подтягивает
+  системные библиотеки Qt 6.
+- `python3-module-yaml`
+
+Для сборки на Fedora/RHEL spec автоматически использует другие имена:
+`python3-pyside6` и `python3-pyyaml`. Это не гарантирует идентичный набор
+Qt-плагинов; для Fedora пакет нужно отдельно проверить.
+
+### Проверка
+
+```bash
+rpm -qip dist/SchoolBell_<version>_noarch.rpm
+rpm -qlp dist/SchoolBell_<version>_noarch.rpm
+sudo rpm -i dist/SchoolBell_<version>_noarch.rpm
+school-bell
+```
+
+Удаление: `sudo rpm -e school-bell`. Пользовательские настройки не входят
+в RPM и при удалении пакета не затрагиваются.
+
+## 3. AppImage
+
+AppImage собирается через PyInstaller в режиме `onedir`. Внутрь попадают
+Python runtime, PySide6, Qt-библиотеки, Qt-плагины (включая
+`plugins/multimedia` и `plugins/platforms`), звуки, расписание и значок.
+
+### Инструменты сборки
+
+```bash
+python3 -m pip install --user pyinstaller
+```
+
+Дополнительно нужен `appimagetool` в `PATH` либо путь в переменной
+`APPIMAGETOOL`. `desktop-file-validate` и ImageMagick желательны, но не
+обязательны.
+
+### Сборка
+
+```bash
+cd /path/to/school_bell
+bash build_scripts/build_appimage.sh
+```
+
+Результат: `dist/SchoolBell_<version>_x86_64.AppImage`.
+
+Если `appimagetool` не найден, скрипт остановится с ошибкой, но оставит
+готовый AppDir в `build/appimage/AppDir`. Это позволяет проверить упаковку
+до установки дополнительного инструмента.
+
+### Проверка
+
+```bash
+chmod +x dist/SchoolBell_<version>_x86_64.AppImage
+./dist/SchoolBell_<version>_x86_64.AppImage
+```
+
+Запуск должен работать из любого каталога, без установки и без root.
+AppImage использует пользовательский каталог данных, а не записывает
+настройки внутрь смонтированного образа.
+
+### Ограничения AppImage
+
+- AppImage не является универсально совместимым с любой glibc. Собирайте его
+  в среде с достаточно старой glibc (например, в контейнере со старым
+  Debian/Ubuntu), иначе на старых дистрибутивах возможна ошибка загрузки.
+- FUSE не всегда доступен. Для проверки без FUSE можно распаковать образ
+  (`--appimage-extract`) или использовать `APPIMAGE_EXTRACT_AND_RUN=1`.
+- Qt Multimedia использует системные FFmpeg/GStreamer-библиотеки, собранные
+  PyInstaller в bundle. Проверяйте воспроизведение на целевой системе.
+- Wayland/X11-плагины и темы оформления зависят от окружения; базовые
+  `platforms/libqxcb.so` и `libqwayland.so` включены.
+
+## Общие проверки
+
+```bash
+python3 -m compileall -q school_bell.py src tests
+python3 -m unittest discover -s tests -v
+desktop-file-validate build/appimage/AppDir/school-bell.desktop
+```
+
+Проверяйте, что в пакетах нет пользовательских файлов:
+
+```bash
+dpkg-deb -c dist/SchoolBell_<version>_all.deb | grep -E 'preferences|logs|/music/'
+rpm -qlp dist/SchoolBell_<version>_noarch.rpm | grep -E 'preferences|logs|/music/'
+```
+
+Обе команды не должны находить совпадений.
+
+## Windows
+
+Существующие Windows-скрипты (`build_msi.bat`, `build_exe.bat`,
+`build_msi.py`) не входят в задачу Linux-сборки. Для Windows по-прежнему
+требуются Windows, PyInstaller/cx_Freeze и WiX/Inno Setup.

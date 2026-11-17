@@ -7,7 +7,10 @@ import datetime
 
 import yaml
 
-from src.config import DEFAULT_SCHEDULE, SCHEDULE_PATH, PREFERENCES_FILE, WEEK_DAYS
+from src.config import (
+    DEFAULT_SCHEDULE, DEFAULT_SCHEDULE_PATH, SCHEDULE_PATH,
+    PREFERENCES_FILE, WEEK_DAYS
+)
 
 RU_TO_EN_DAYS = {
     "Понедельник": "monday", "Вторник": "tuesday", "Среда": "wednesday",
@@ -22,9 +25,12 @@ class ConfigManager:
         self.preferences = {}
 
     def load_schedule(self):
-        if SCHEDULE_PATH.exists():
+        schedule_path = (
+            SCHEDULE_PATH if SCHEDULE_PATH.exists() else DEFAULT_SCHEDULE_PATH
+        )
+        if schedule_path.exists():
             try:
-                with open(SCHEDULE_PATH, "r", encoding="utf-8") as f:
+                with open(schedule_path, "r", encoding="utf-8") as f:
                     loaded = yaml.safe_load(f) or {}
                 if not self._validate_schedule(loaded):
                     print("Warning: schedule.yml has invalid structure, using defaults")

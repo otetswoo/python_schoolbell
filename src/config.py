@@ -6,37 +6,43 @@ import os
 from pathlib import Path
 
 # Version of the application
-VERSION = "1.0.3"
+VERSION = "1.0.5"
+
+IS_FROZEN = getattr(sys, "frozen", False)
 
 # Handle PyInstaller frozen application paths
-if getattr(sys, 'frozen', False):
-    # Running as compiled executable
-    BASE_PATH = Path(sys._MEIPASS)
+if IS_FROZEN:
+    # Running as compiled executable (PyInstaller onedir/onefile)
+    ROOT = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
 else:
-    # Running as script
-    BASE_PATH = Path(__file__).resolve().parent.parent
+    # Running as a script from the project tree
+    ROOT = Path(__file__).resolve().parent.parent
 
-ROOT = BASE_PATH
+# Read-only bundled resources (sounds, default schedule, icon).
+RESOURCE_ROOT = ROOT
+DEFAULT_SCHEDULE_PATH = RESOURCE_ROOT / "schedule.yml"
+SOUNDS_DIR = RESOURCE_ROOT / "sounds"
 
-SCHEDULE_PATH = ROOT / "schedule.yml"
-PREFERENCES_FILE = ROOT / "preferences.yml"
-SOUNDS_DIR = ROOT / "sounds"
-
-# For installed system packages, use user-writable directories for data
-# Check if running from system installation path
-if str(ROOT).startswith("/usr/lib"):
-    # System installation - use user data directories
-    HOME = Path.home()
-    DATA_ROOT = HOME / ".local" / "share" / "school-bell"
+# Writable user data. Installed packages and AppImage must never write
+# settings next to read-only application resources.
+INSTALLED = IS_FROZEN or str(ROOT).startswith(("/usr/lib", "/usr/share", "/opt"))
+if INSTALLED:
+    xdg_data_home = os.environ.get("XDG_DATA_HOME", "")
+    if xdg_data_home and os.path.isabs(xdg_data_home):
+        DATA_ROOT = Path(xdg_data_home) / "school-bell"
+    else:
+        DATA_ROOT = Path.home() / ".local" / "share" / "school-bell"
     MUSIC_DIR = DATA_ROOT / "music"
     LOGS_DIR = DATA_ROOT / "logs"
-    # For preferences and schedule in system install, also use user directory
     PREFERENCES_FILE = DATA_ROOT / "preferences.yml"
     SCHEDULE_PATH = DATA_ROOT / "schedule.yml"
 else:
     # Development/standalone mode - use local directories
+    DATA_ROOT = ROOT
     MUSIC_DIR = ROOT / "music"
     LOGS_DIR = ROOT / "logs"
+    PREFERENCES_FILE = ROOT / "preferences.yml"
+    SCHEDULE_PATH = ROOT / "schedule.yml"
 
 WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 WEEK_DAYS_RU = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]

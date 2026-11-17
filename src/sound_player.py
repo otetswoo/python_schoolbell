@@ -129,6 +129,18 @@ class SoundPlayer(QObject):
             return True
         return self.current_type == sound_type
 
+    def position_ms(self):
+        """Возвращает текущую позицию воспроизведения в миллисекундах."""
+        if not self.player:
+            return 0
+        return max(0, int(self.player.position()))
+
+    def duration_ms(self):
+        """Возвращает длительность текущего трека в миллисекундах (0, если неизвестна)."""
+        if not self.player:
+            return 0
+        return max(0, int(self.player.duration()))
+
     def stop_all(self):
         """Остановка любого воспроизведения (звонка, музыки, гимна или объявления)."""
         if self.player:

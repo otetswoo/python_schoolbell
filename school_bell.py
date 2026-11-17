@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QLabel, QMenu, QFileDialog, QMessageBox,
     QHeaderView, QDialog, QListWidget, QListWidgetItem, QCheckBox,
     QGroupBox, QSystemTrayIcon,
-    QFrame,
+    QFrame, QProgressBar,
 )
 from PySide6.QtGui import QColor, QFont, QKeySequence, QIcon, QAction
 from PySide6.QtCore import Qt, QTimer
@@ -170,6 +170,9 @@ class SchoolBell(QMainWindow):
         self.bells_enabled = bells_prefs.get("enabled", True)
         self.current_playing_track = None
         self.main_window_message = None
+        self._music_auto_started = False
+        self._holidays_active = None
+        self._last_date = datetime.date.today()
 
         music_settings = self.config.get_music_settings()
         self.music_enabled = music_settings.get("enabled", False)
@@ -210,6 +213,89 @@ class SchoolBell(QMainWindow):
         """Проверяет, закончилась ли музыка на перемене."""
         self.music_player.check_music_finished()
 
+    def _format_ms(self, milliseconds):
+        """Форматирует миллисекунды в MM:SS."""
+        total_seconds = max(0, int(milliseconds) // 1000)
+        return f"{total_seconds // 60}:{total_seconds % 60:02d}"
+
+    def _update_music_progress(self):
+        """Обновляет прогресс-бар воспроизведения музыки."""
+        if not hasattr(self, "musicProgress"):
+            return
+
+        is_music_playing = (
+            self.sound_player.current_type == "music"
+            and self.sound_player.is_playing("music")
+        )
+        if not is_music_playing:
+            self.musicProgress.setRange(0, 1)
+            self.musicProgress.setValue(0)
+            self.musicTimeLabel.setText("0:00 / 0:00")
+            return
+
+        position = self.sound_player.position_ms()
+        duration = self.sound_player.duration_ms()
+        if duration > 0:
+            self.musicProgress.setRange(0, duration)
+            self.musicProgress.setValue(min(position, duration))
+            self.musicTimeLabel.setText(
+                f"{self._format_ms(position)} / {self._format_ms(duration)}"
+            )
+        else:
+            # Длительность ещё не известна или трек без корректной длительности.
+            self.musicProgress.setRange(0, 1)
+            self.musicProgress.setValue(0)
+            self.musicTimeLabel.setText(f"{self._format_ms(position)} / --:--")
+
+    def _refresh_holidays_state(self, force=False):
+        """Пересчитывает фактическое состояние каникул по текущей дате."""
+        active = self.config.is_holidays_active(datetime.date.today())
+        changed = active != self._holidays_active
+        if force or changed:
+            self._holidays_active = active
+            self._update_holiday_indicator()
+            if active:
+                self._stop_auto_music_for_holidays()
+        if changed:
+            self.logger.log_event(
+                "info", f"Holidays mode: {'active' if active else 'inactive'}"
+            )
+        return active
+
+    def _update_holiday_indicator(self):
+        """Обновляет цвет индикатора каникул на главном экране."""
+        if not hasattr(self, "holidayIndicator"):
+            return
+        active = bool(self._holidays_active)
+        self.holidayIndicator.setText(self.tr("holidays_indicator", "🏖 Каникулы"))
+        if active:
+            self.holidayIndicator.setStyleSheet(
+                "background-color: #d32f2f; color: white; "
+                "border-radius: 4px; padding: 4px 8px;"
+            )
+            self.holidayIndicator.setToolTip(
+                self.tr("holidays_indicator_active", "Каникулы активны")
+            )
+        else:
+            self.holidayIndicator.setStyleSheet(
+                "background-color: #9e9e9e; color: white; "
+                "border-radius: 4px; padding: 4px 8px;"
+            )
+            self.holidayIndicator.setToolTip(
+                self.tr("holidays_indicator_inactive", "Каникулы неактивны")
+            )
+
+    def _stop_auto_music_for_holidays(self):
+        """Останавливает только автоматически запущенную музыку."""
+        if self._music_auto_started and self.sound_player.is_playing("music"):
+            self.sound_player.stop_all()
+            self.current_playing_track = None
+            self._music_auto_started = False
+            self.statusLabel.setText(
+                self.tr("holidays_auto_music_stopped", "Каникулы: музыка остановлена")
+            )
+            self.logger.log_event("music", "Auto music stopped: holidays active")
+
     def _texts(self, locale=None):
         """Возвращает локализацию с fallback на русский.
         Результат кэшируется по ключу локали."""
@@ -247,11 +333,7 @@ class SchoolBell(QMainWindow):
         controls_frame.setMinimumWidth(150)
         controls_frame.setMaximumWidth(150)
         
-        # Кнопки Edit и Today
-        self.edit_btn = QPushButton(self.tr("btn_edit", "Edit"))
-        self.edit_btn.setMinimumHeight(30)
-        controls_layout.addWidget(self.edit_btn)
-        
+        # Кнопка Today
         self.today_btn = QPushButton(self.tr('btn_today'))
         self.today_btn.setMinimumHeight(30)
         self.today_btn.setToolTip(self.tr("navigate_to_current_day", "Navigate to current day"))
@@ -315,6 +397,11 @@ class SchoolBell(QMainWindow):
         self.stop_btn.setMinimumHeight(34)
         self.stop_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
         bottom_layout.addWidget(self.stop_btn)
+
+        self.holidayIndicator = QLabel(self.tr("holidays_indicator", "🏖 Каникулы"))
+        self.holidayIndicator.setMinimumHeight(34)
+        self.holidayIndicator.setAlignment(Qt.AlignCenter)
+        bottom_layout.addWidget(self.holidayIndicator)
         
         main_layout.addWidget(buttons_frame)
         
@@ -324,6 +411,22 @@ class SchoolBell(QMainWindow):
         self.trackLabel.setStyleSheet("color: #1565c0; font-size: 11px; padding: 2px 8px;")
         self.trackLabel.setVisible(False)
         main_layout.addWidget(self.trackLabel)
+
+        # Прогресс воспроизведения музыки
+        music_progress_layout = QHBoxLayout()
+        music_progress_layout.setSpacing(8)
+        self.musicProgress = QProgressBar()
+        self.musicProgress.setRange(0, 1)
+        self.musicProgress.setValue(0)
+        self.musicProgress.setTextVisible(False)
+        self.musicProgress.setMaximumHeight(12)
+        music_progress_layout.addWidget(self.musicProgress, stretch=1)
+        self.musicTimeLabel = QLabel("0:00 / 0:00")
+        self.musicTimeLabel.setMinimumWidth(90)
+        self.musicTimeLabel.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.musicTimeLabel.setStyleSheet("color: #555; font-size: 11px;")
+        music_progress_layout.addWidget(self.musicTimeLabel)
+        main_layout.addLayout(music_progress_layout)
         
         # Строка статуса
         self.statusLabel = QLabel(self.tr("status_ready", "Ready"))
@@ -400,7 +503,6 @@ class SchoolBell(QMainWindow):
         self.volumeLayout.addStretch()
 
         # Подключаем кнопки
-        self.edit_btn.clicked.connect(self.edit_schedule)
         self.today_btn.clicked.connect(self.set_today_schedule)
         self.bell_btn.clicked.connect(self.manual_bell)
         self.music_btn.clicked.connect(self.manual_music)
@@ -636,7 +738,9 @@ class SchoolBell(QMainWindow):
         self.actionMusic = QAction(self.tr("action_music", "Music Break..."), self)
         self.actionAnthem = QAction(self.tr("action_anthem", "Anthem..."), self)
         self.actionAnnouncement = QAction(self.tr("action_announcement", "Announcement..."), self)
+        self.actionHolidays = QAction(self.tr("action_holidays", "Holiday Schedule"), self)
         self.actionTemplates = QAction(self.tr("action_templates", "Edit Templates"), self)
+        self.actionEditDay = QAction(self.tr("action_edit_day", "Edit Day"), self)
         
         # Подменю Language
         self.menuLanguage = QMenu(self.tr("menu_language", "Language"), self.menuSettings)
@@ -649,6 +753,8 @@ class SchoolBell(QMainWindow):
         self.menuSettings.addAction(self.actionMusic)
         self.menuSettings.addAction(self.actionAnthem)
         self.menuSettings.addAction(self.actionAnnouncement)
+        self.menuSettings.addAction(self.actionHolidays)
+        self.menuSettings.addAction(self.actionEditDay)
         self.menuSettings.addAction(self.actionTemplates)
         self.menuSettings.addSeparator()
         self.actionLog = QAction(
@@ -679,6 +785,8 @@ class SchoolBell(QMainWindow):
         self.actionMusic.triggered.connect(self.show_music_settings)
         self.actionAnthem.triggered.connect(self.show_anthem_settings)
         self.actionAnnouncement.triggered.connect(self.show_announcement_settings)
+        self.actionHolidays.triggered.connect(self.show_holiday_settings)
+        self.actionEditDay.triggered.connect(self.edit_schedule)
         self.actionTemplates.triggered.connect(self.show_templates_editor)
         self.actionLog.triggered.connect(self.show_log_viewer)
         self.actionLocaleRu.triggered.connect(lambda: self.set_locale("ru"))
@@ -732,6 +840,10 @@ class SchoolBell(QMainWindow):
         folders = music.get("folders", [])
         if music.get("enabled") and folders:
             self.music_player.set_music_folders(folders)
+        selected_tracks = (
+            music.get("selected_tracks") if "selected_tracks" in music else None
+        )
+        self.music_player.set_selected_tracks(selected_tracks)
 
         # Загружаем единые шаблоны расписания.
         templates = self.config.schedule_data.get("schedules", DEFAULT_SCHEDULE["schedules"])
@@ -878,6 +990,18 @@ class SchoolBell(QMainWindow):
     def update_ui(self):
         now = datetime.datetime.now()
 
+        # При смене календарной даты (в том числе после выхода из сна)
+        # автоматически показываем расписание текущего дня.
+        today_date = now.date()
+        if today_date != self._last_date:
+            self._last_date = today_date
+            # Сбрасываем дневное состояние даже если после сна прошла
+            # ровно неделя и день недели совпал.
+            self.last_day = None
+            self.set_today_schedule()
+
+        self._refresh_holidays_state()
+
         day_names_ru = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
         day_names_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         day_name = day_names_ru[now.weekday()] if self.current_locale == "ru" else day_names_en[now.weekday()]
@@ -897,35 +1021,12 @@ class SchoolBell(QMainWindow):
         cur, seconds_left, next_seconds, is_break = self.get_current_lesson(now)
 
         if cur:
-            mins = seconds_left // 60
             lesson_text = f"Урок {cur.get('num')}" if self.current_locale == "ru" else f"Lesson {cur.get('num')}"
-            status += f"   |   {lesson_text}, {mins} мин" if self.current_locale == "ru" else f"   |   {lesson_text}, {mins} min"
-            
-            # Добавляем время до перемены (звонка)
-            bell_mins = mins
-            bell_secs = seconds_left % 60
-            if self.current_locale == "ru":
-                status += f" ({bell_mins}:{bell_secs:02d} до звонка)"
-            else:
-                status += f" ({bell_mins}:{bell_secs:02d} to bell)"
-                
+            status += f"   |   {lesson_text}"
         elif is_break:
-            # Сейчас перемена - показываем время до следующего урока
-            next_mins = next_seconds // 60
-            next_secs = next_seconds % 60
-            if self.current_locale == "ru":
-                status += f"   |   Перемена, следующий урок через {next_mins} мин {next_secs} сек"
-            else:
-                status += f"   |   Break, next lesson in {next_mins} min {next_secs} sec"
-        elif next_seconds is not None and next_seconds > 0:
-            # Показываем время до следующего звонка
-            next_mins = next_seconds // 60
-            next_secs = next_seconds % 60
-            if self.current_locale == "ru":
-                status += f"   |   Следующий звонок через {next_mins} мин {next_secs} сек"
-            else:
-                status += f"   |   Next bell in {next_mins} min {next_secs} sec"
-        else:
+            break_text = "Перемена" if self.current_locale == "ru" else "Break"
+            status += f"   |   {break_text}"
+        elif next_seconds is None or next_seconds <= 0:
             status += f"   |   {self.tr('status_lessons_finished', 'Lessons are finished')}"
 
         # Обновляем метку текущего трека отдельно
@@ -936,6 +1037,8 @@ class SchoolBell(QMainWindow):
         else:
             self.trackLabel.setText("")
             self.trackLabel.setVisible(False)
+
+        self._update_music_progress()
 
         # Формируем вторую строку статуса (только сообщения, без трека)
         second_line_parts = []
@@ -1233,6 +1336,12 @@ class SchoolBell(QMainWindow):
         folders = music_settings.get("folders", [])
         if folders and not self.music_player.music_folders:
             self.music_player.set_music_folders(folders)
+        selected_tracks = (
+            music_settings.get("selected_tracks")
+            if "selected_tracks" in music_settings
+            else None
+        )
+        self.music_player.set_selected_tracks(selected_tracks)
 
         if not self.music_player.music_folders:
             self._set_main_window_message(
@@ -1253,18 +1362,13 @@ class SchoolBell(QMainWindow):
             self.current_playing_track = None
             return
 
-        selected_tracks = set(music_settings.get("selected_tracks", []))
         track = self.music_player.get_next_track()
-        if selected_tracks:
-            attempts = 0
-            while track and str(track) not in selected_tracks and attempts < 200:
-                track = self.music_player.get_next_track()
-                attempts += 1
         if track:
             self.sound_player.play_music(str(track), volume=music_volume)
             self._clear_main_window_message()
             self.music_player.mark_played()
             self.current_playing_track = str(track)
+            self._music_auto_started = True
             if event_time:
                 self.played_events[cache_key] = True
             self.logger.log_event("music", f"Break music: {Path(track).name}")
@@ -1277,6 +1381,10 @@ class SchoolBell(QMainWindow):
 
     def check_bells(self):
         now = datetime.datetime.now()
+        # На каникулах автоматические события не запускаются. Ручные
+        # кнопки и меню продолжают работать.
+        if self._refresh_holidays_state():
+            return
         today_key = WEEK_DAYS[now.weekday()]
         self._reset_daily_state(today_key)
         self.check_anthem(now)
@@ -1383,8 +1491,15 @@ class SchoolBell(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             music = self.config.get_music_settings()
             folders = music.get("folders", [])
-            if folders:
-                self.music_player.set_music_folders(folders)
+            self.music_player.set_music_folders(folders)
+            selected_tracks = (
+                music.get("selected_tracks") if "selected_tracks" in music else None
+            )
+            self.music_player.set_selected_tracks(selected_tracks)
+            if not folders:
+                self.music_player.stop()
+                self.current_playing_track = None
+                self._music_auto_started = False
             self.config.save_preferences(self.config.preferences)
             self._sync_volume_controls_from_config()
             self._sync_playback_state_from_config()
@@ -1408,6 +1523,14 @@ class SchoolBell(QMainWindow):
             self._sync_playback_state_from_config()
             self._update_announcement_ui_state()
 
+    def show_holiday_settings(self):
+        """Открыть диалог графика каникул."""
+        from src.holiday_settings_dialog import HolidaySettingsDialog
+        dlg = HolidaySettingsDialog(self, self.config, self.tr)
+        if dlg.exec() == QDialog.Accepted:
+            self._refresh_holidays_state(force=True)
+            self.statusLabel.setText(self.tr("holidays_settings_saved", "Каникулы обновлены"))
+
     def show_log_viewer(self):
         """Открыть диалог просмотра журнала событий"""
         from src.log_viewer_dialog import LogViewerDialog
@@ -1428,7 +1551,6 @@ class SchoolBell(QMainWindow):
 
         self._update_day_buttons_style()
 
-        self.edit_btn.setText(texts["btn_edit"])
         self.statusLabel.setText(texts["status_ready"])
         self.bells_checkbox.setText(texts["chk_bells"])
         self.music_checkbox.setText(texts["chk_music"])
@@ -1460,6 +1582,8 @@ class SchoolBell(QMainWindow):
         self.actionMusic.setText(texts["action_music"])
         self.actionAnthem.setText(texts["action_anthem"])
         self.actionAnnouncement.setText(texts["action_announcement"])
+        self.actionHolidays.setText(texts["action_holidays"])
+        self.actionEditDay.setText(texts["action_edit_day"])
         self.actionTemplates.setText(texts["action_templates"])
         self.actionLog.setText(texts["action_log"])
         self.menuLanguage.setTitle(texts["menu_language"])
@@ -1477,6 +1601,8 @@ class SchoolBell(QMainWindow):
             self.tray_action_today.setText(texts["tray_today"])
         if hasattr(self, 'tray_action_exit'):
             self.tray_action_exit.setText(texts["tray_exit"])
+
+        self._update_holiday_indicator()
 
     def on_bells_toggled(self, state):
         self.bells_enabled = (state != 0)
@@ -1501,6 +1627,12 @@ class SchoolBell(QMainWindow):
         self.config.save_preferences(self.config.preferences)
         if self.music_enabled:
             folders = music_settings.get("folders", [])
+            selected_tracks = (
+                music_settings.get("selected_tracks")
+                if "selected_tracks" in music_settings
+                else None
+            )
+            self.music_player.set_selected_tracks(selected_tracks)
             if not folders or not self.music_player.set_music_folders(folders):
                 self._set_main_window_message(
                     "missing_music_folder",
@@ -1591,6 +1723,12 @@ class SchoolBell(QMainWindow):
                     "Папка с музыкой не выбрана или не найдена.",
                 )
                 return
+            selected_tracks = (
+                music_settings.get("selected_tracks")
+                if "selected_tracks" in music_settings
+                else None
+            )
+            self.music_player.set_selected_tracks(selected_tracks)
             # Останавливаем предыдущее воспроизведение перед запуском нового
             self.sound_player.stop_all()
             volumes = self.config.get_volumes()
@@ -1606,6 +1744,7 @@ class SchoolBell(QMainWindow):
                 self._clear_main_window_message()
                 self.music_player.mark_played()
                 self.current_playing_track = str(track)
+                self._music_auto_started = False
                 self.statusLabel.setText(f"🎵 {self.tr('btn_music').replace('🎵', '').strip()}!")
                 self.logger.log_event("music", "Manual music playback")
             else:
@@ -1825,11 +1964,13 @@ class SchoolBell(QMainWindow):
     def _on_music_finished(self):
         """Вызывается когда музыка закончилась - очищает статус трека."""
         self.current_playing_track = None
+        self._music_auto_started = False
 
     def manual_stop(self):
         """Остановка воспроизведения звонка, музыки, гимна и объявления"""
         self.sound_player.stop_all()
         self.current_playing_track = None
+        self._music_auto_started = False
         self.statusLabel.setText(f"🛑 {self.tr('btn_stop').replace('🛑', '').strip()}!")
         self.logger.log_event("stop", "Playback stopped by user")
 

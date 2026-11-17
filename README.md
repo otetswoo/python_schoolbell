@@ -17,7 +17,7 @@ School Bell — настольное приложение для автомат�
 
 ## Интерфейс
 
-![Интерфейс School Bell](docs/images/screenshot.png)
+![Интерфейс School Bell](docs/images/preview.png)
 
 
 ## Возможности

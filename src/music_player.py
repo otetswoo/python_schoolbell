@@ -9,6 +9,8 @@ from pathlib import Path
 class MusicPlayer:
     def __init__(self, sound_player=None, logger=None):
         self.music_folders = []
+        # None — играть все треки; set — только явно выбранные файлы.
+        self.selected_tracks = None
         self.played_today = set()
         self.last_play_time = 0
         self.delay_minutes = 2
@@ -27,11 +29,24 @@ class MusicPlayer:
             p = Path(folder)
             if p.exists() and p.is_dir():
                 valid_folders.append(p)
-        if valid_folders:
-            self.music_folders = valid_folders
-            self.played_today.clear()
-            return True
-        return False
+        # Пустой или невалидный список должен реально очищать папки,
+        # иначе после снятия всех галочек продолжила бы играть старая музыка.
+        self.music_folders = valid_folders
+        self.played_today.clear()
+        return bool(valid_folders)
+
+    def set_selected_tracks(self, tracks):
+        """Задаёт белый список треков.
+
+        None означает отсутствие настройки (играть все файлы),
+        пустой список — явный запрет воспроизведения.
+        """
+        if tracks is None:
+            self.selected_tracks = None
+        else:
+            self.selected_tracks = {
+                str(Path(track).resolve()) for track in tracks if track
+            }
 
     def set_music_folder(self, folder):
         return self.set_music_folders([folder] if folder else [])
@@ -39,15 +54,23 @@ class MusicPlayer:
     def get_audio_files(self):
         if not self.music_folders:
             return []
-        
+
         extensions = {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma"}
         files = []
         for folder in self.music_folders:
             if not folder.exists():
                 continue
-            for f in folder.iterdir():
+            # rglob соответствует структуре папок, отображаемой в настройках,
+            # включая вложенные каталоги.
+            for f in folder.rglob("*"):
                 if f.is_file() and f.suffix.lower() in extensions:
                     files.append(f)
+
+        if self.selected_tracks is not None:
+            files = [
+                f for f in files
+                if str(f.resolve()) in self.selected_tracks
+            ]
         return files
     
     def get_next_track(self):

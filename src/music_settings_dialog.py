@@ -104,7 +104,8 @@ class MusicSettingsDialog(QDialog):
             delay = 2
         self.delay_spinbox.setValue(delay)
         self._update_folder_label()
-        self.update_file_list(music.get("selected_tracks", []))
+        selected_tracks = music.get("selected_tracks") if "selected_tracks" in music else None
+        self.update_file_list(selected_tracks)
 
     def _update_folder_label(self):
         if not self.music_folders:
@@ -115,16 +116,21 @@ class MusicSettingsDialog(QDialog):
             self.folder_label.setText(f"Папок выбрано: {len(self.music_folders)}")
 
     def update_file_list(self, selected_tracks=None):
+        self._updating_checks = True
         self.file_list.clear()
         self.track_items = []
         self.folder_items = []
-        selected = set(selected_tracks or [])
+        # None — настройки ещё нет (старый конфиг): отмечаем всё.
+        # Пустой список — пользователь явно снял все галочки.
+        has_selection = selected_tracks is not None
+        selected = {str(Path(track).resolve()) for track in (selected_tracks or [])}
         files = self._audio_files()
 
         if not files:
             item = QTreeWidgetItem(["📭 В выбранных папках нет аудиофайлов"])
             item.setForeground(0, Qt.gray)
             self.file_list.addTopLevelItem(item)
+            self._updating_checks = False
             return
 
         folders = {}
@@ -151,7 +157,7 @@ class MusicSettingsDialog(QDialog):
                 child = QTreeWidgetItem([f"   🎵 {track.name}"])
                 child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
                 child.setData(0, Qt.UserRole, str(track))
-                is_checked = (not selected) or (str(track) in selected)
+                is_checked = (not has_selection) or (str(track.resolve()) in selected)
                 child.setCheckState(0, Qt.Checked if is_checked else Qt.Unchecked)
                 if is_checked:
                     checked_count += 1
@@ -166,6 +172,7 @@ class MusicSettingsDialog(QDialog):
                 folder_item.setCheckState(0, Qt.PartiallyChecked)
 
         self.file_list.expandAll()
+        self._updating_checks = False
 
     def _save_music_state(self):
         selected_tracks = [
@@ -221,8 +228,22 @@ class MusicSettingsDialog(QDialog):
 
 
     def on_item_changed(self, item, _column):
-        if item.childCount() > 0:
+        if getattr(self, "_updating_checks", False):
             return
+        if item.childCount() > 0:
+            # Снимая/ставя галочку папки, применяем состояние ко всем
+            # вложенным трекам. PartiallyChecked не меняет детей.
+            if item.checkState(0) == Qt.PartiallyChecked:
+                return
+            checked = item.checkState(0) == Qt.Checked
+            self._updating_checks = True
+            try:
+                for index in range(item.childCount()):
+                    item.child(index).setCheckState(
+                        0, Qt.Checked if checked else Qt.Unchecked
+                    )
+            finally:
+                self._updating_checks = False
         self._save_music_state()
 
     def accept(self):

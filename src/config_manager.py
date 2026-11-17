@@ -214,8 +214,9 @@ class ConfigManager:
         if "folders" not in music:
             folder = music.get("folder", "")
             music["folders"] = [folder] if folder else []
-        if "selected_tracks" not in music:
-            music["selected_tracks"] = []
+        # Ключ selected_tracks намеренно не добавляется по умолчанию:
+        # его отсутствие означает «играть все треки» (старый конфиг),
+        # а явно сохранённый пустой список — «не играть ничего».
         return music
 
     def set_music_folder(self, folder):
@@ -252,6 +253,78 @@ class ConfigManager:
         if "anthem" not in self.preferences:
             self.preferences["anthem"] = {}
         self.preferences["anthem"]["time"] = time_str
+
+    def get_holidays(self):
+        """Возвращает настройки каникул: mode (auto/on/off) и periods."""
+        data = self.preferences.get("holidays")
+        if not isinstance(data, dict):
+            data = {}
+
+        mode = data.get("mode", "auto")
+        if mode not in ("auto", "on", "off"):
+            mode = "auto"
+
+        periods = []
+        for item in data.get("periods", []) or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                start = datetime.date.fromisoformat(str(item.get("start", "")))
+                end = datetime.date.fromisoformat(str(item.get("end", "")))
+            except (TypeError, ValueError):
+                continue
+            if start <= end:
+                periods.append({"start": start.isoformat(), "end": end.isoformat()})
+        return {"mode": mode, "periods": periods}
+
+    def get_holiday_mode(self):
+        return self.get_holidays()["mode"]
+
+    def set_holiday_mode(self, mode):
+        if mode not in ("auto", "on", "off"):
+            mode = "auto"
+        holidays = self.get_holidays()
+        holidays["mode"] = mode
+        self.preferences["holidays"] = holidays
+
+    def set_holiday_periods(self, periods):
+        """Сохраняет корректные периоды каникул в формате YYYY-MM-DD."""
+        normalized = []
+        for item in periods or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                start = datetime.date.fromisoformat(str(item.get("start", "")))
+                end = datetime.date.fromisoformat(str(item.get("end", "")))
+            except (TypeError, ValueError):
+                continue
+            if start <= end:
+                normalized.append({"start": start.isoformat(), "end": end.isoformat()})
+        holidays = self.get_holidays()
+        holidays["periods"] = normalized
+        self.preferences["holidays"] = holidays
+
+    def is_holidays_active(self, on_date=None):
+        """Определяет фактическое состояние каникул для указанной даты.
+
+        Ручные режимы on/off имеют приоритет над графиком. В auto обе
+        граничные даты периода включаются в каникулы.
+        """
+        holidays = self.get_holidays()
+        if holidays["mode"] == "on":
+            return True
+        if holidays["mode"] == "off":
+            return False
+
+        target = on_date or datetime.date.today()
+        if isinstance(target, datetime.datetime):
+            target = target.date()
+        for period in holidays["periods"]:
+            start = datetime.date.fromisoformat(period["start"])
+            end = datetime.date.fromisoformat(period["end"])
+            if start <= target <= end:
+                return True
+        return False
 
     def get_locale(self):
         return self.preferences.get("locale", "ru")

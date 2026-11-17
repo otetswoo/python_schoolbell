@@ -5,7 +5,9 @@ import datetime
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from src import config_manager as config_manager_module
 from src.config_manager import ConfigManager
 from src.music_player import MusicPlayer
 
@@ -49,6 +51,33 @@ class HolidayConfigTests(unittest.TestCase):
         empty.preferences = {}
         self.assertEqual(empty.get_holidays()["mode"], "auto")
         self.assertEqual(empty.get_holidays()["periods"], [])
+
+
+class HolidayPersistenceTests(unittest.TestCase):
+    def test_mode_and_periods_survive_reload(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            prefs_path = Path(tempdir) / "preferences.yml"
+            with mock.patch.object(
+                config_manager_module, "PREFERENCES_FILE", prefs_path
+            ):
+                config = ConfigManager()
+                config.preferences = {}
+                config.set_holiday_mode("off")
+                config.set_holiday_periods([
+                    {"start": "2026-11-17", "end": "2026-11-20"},
+                ])
+                self.assertTrue(config.save_preferences(config.preferences))
+
+                restored = ConfigManager()
+                self.assertTrue(restored.load_preferences())
+                self.assertEqual(restored.get_holiday_mode(), "off")
+                self.assertEqual(
+                    restored.get_holidays()["periods"],
+                    [{"start": "2026-11-17", "end": "2026-11-20"}],
+                )
+                self.assertFalse(
+                    restored.is_holidays_active(datetime.date(2026, 11, 18))
+                )
 
 
 class MusicSettingsTests(unittest.TestCase):

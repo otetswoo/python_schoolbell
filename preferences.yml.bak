@@ -1,15 +1,20 @@
 announcements: []
+announcements_enabled: false
 anthem:
   day: monday
   enabled: true
-  file: ''
+  file: /mnt/files/Загрузки/nukadeti.ru_-_dvazhdy-dva-chetyre.mp3
   time: 08:32
 holidays:
-  mode: auto
+  mode: 'off'
   periods:
   - end: '2026-11-22'
     start: '2026-11-16'
-last_saved: '2026-11-17T17:00:54.048189'
+  - end: '2027-02-28'
+    start: '2027-02-22'
+  - end: '2027-04-11'
+    start: '2027-04-05'
+last_saved: '2026-11-17T20:31:35.903691'
 locale: ru
 music:
   delay_minutes: 2
@@ -536,5 +541,6 @@ variants:
   tuesday: usual
   wednesday: usual
 volumes:
+  announcement: 100
   anthem: 100
   music: 51

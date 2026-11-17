@@ -172,6 +172,7 @@ class SchoolBell(QMainWindow):
         self.main_window_message = None
         self._music_auto_started = False
         self._holidays_active = None
+        self._holidays_resume_time = None
         self._last_date = datetime.date.today()
 
         music_settings = self.config.get_music_settings()
@@ -218,16 +219,12 @@ class SchoolBell(QMainWindow):
         total_seconds = max(0, int(milliseconds) // 1000)
         return f"{total_seconds // 60}:{total_seconds % 60:02d}"
 
-    def _update_music_progress(self):
-        """Обновляет прогресс-бар воспроизведения музыки."""
+    def _update_playback_progress(self):
+        """Обновляет прогресс-бар для любого воспроизводимого звука."""
         if not hasattr(self, "musicProgress"):
             return
 
-        is_music_playing = (
-            self.sound_player.current_type == "music"
-            and self.sound_player.is_playing("music")
-        )
-        if not is_music_playing:
+        if not self.sound_player.is_playing():
             self.musicProgress.setRange(0, 1)
             self.musicProgress.setValue(0)
             self.musicTimeLabel.setText("0:00 / 0:00")
@@ -249,14 +246,18 @@ class SchoolBell(QMainWindow):
 
     def _refresh_holidays_state(self, force=False):
         """Пересчитывает фактическое состояние каникул по текущей дате."""
+        previous = self._holidays_active
         active = self.config.is_holidays_active(datetime.date.today())
-        changed = active != self._holidays_active
+        changed = active != previous
         if force or changed:
             self._holidays_active = active
             self._update_holiday_indicator()
             if active:
                 self._stop_auto_music_for_holidays()
         if changed:
+            if previous and not active:
+                # Не даём сработать событиям, пропущенным во время каникул.
+                self._holidays_resume_time = datetime.datetime.now()
             self.logger.log_event(
                 "info", f"Holidays mode: {'active' if active else 'inactive'}"
             )
@@ -270,16 +271,20 @@ class SchoolBell(QMainWindow):
         self.holidayIndicator.setText(self.tr("holidays_indicator", "🏖 Каникулы"))
         if active:
             self.holidayIndicator.setStyleSheet(
-                "background-color: #d32f2f; color: white; "
-                "border-radius: 4px; padding: 4px 8px;"
+                "QPushButton { background-color: #ff6b6b; color: white; "
+                "border: 1px solid #e05555; border-radius: 8px; padding: 4px 8px; }"
+                "QPushButton:hover { background-color: #ff5252; }"
+                "QPushButton:pressed { background-color: #e05555; }"
             )
             self.holidayIndicator.setToolTip(
                 self.tr("holidays_indicator_active", "Каникулы активны")
             )
         else:
             self.holidayIndicator.setStyleSheet(
-                "background-color: #9e9e9e; color: white; "
-                "border-radius: 4px; padding: 4px 8px;"
+                "QPushButton { background-color: #d0d0d0; color: #555555; "
+                "border: 1px solid #bcbcbc; border-radius: 8px; padding: 4px 8px; }"
+                "QPushButton:hover { background-color: #c4c4c4; }"
+                "QPushButton:pressed { background-color: #b8b8b8; }"
             )
             self.holidayIndicator.setToolTip(
                 self.tr("holidays_indicator_inactive", "Каникулы неактивны")
@@ -338,6 +343,10 @@ class SchoolBell(QMainWindow):
         self.today_btn.setMinimumHeight(30)
         self.today_btn.setToolTip(self.tr("navigate_to_current_day", "Navigate to current day"))
         controls_layout.addWidget(self.today_btn)
+
+        self.holidayIndicator = QPushButton(self.tr("holidays_indicator", "🏖 Каникулы"))
+        self.holidayIndicator.setMinimumHeight(30)
+        controls_layout.addWidget(self.holidayIndicator)
         
         controls_layout.addStretch()
         
@@ -397,11 +406,6 @@ class SchoolBell(QMainWindow):
         self.stop_btn.setMinimumHeight(34)
         self.stop_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
         bottom_layout.addWidget(self.stop_btn)
-
-        self.holidayIndicator = QLabel(self.tr("holidays_indicator", "🏖 Каникулы"))
-        self.holidayIndicator.setMinimumHeight(34)
-        self.holidayIndicator.setAlignment(Qt.AlignCenter)
-        bottom_layout.addWidget(self.holidayIndicator)
         
         main_layout.addWidget(buttons_frame)
         
@@ -504,6 +508,7 @@ class SchoolBell(QMainWindow):
 
         # Подключаем кнопки
         self.today_btn.clicked.connect(self.set_today_schedule)
+        self.holidayIndicator.clicked.connect(self.show_holiday_settings)
         self.bell_btn.clicked.connect(self.manual_bell)
         self.music_btn.clicked.connect(self.manual_music)
         self.anthem_btn.clicked.connect(self.manual_anthem)
@@ -1038,7 +1043,7 @@ class SchoolBell(QMainWindow):
             self.trackLabel.setText("")
             self.trackLabel.setVisible(False)
 
-        self._update_music_progress()
+        self._update_playback_progress()
 
         # Формируем вторую строку статуса (только сообщения, без трека)
         second_line_parts = []
@@ -1218,6 +1223,10 @@ class SchoolBell(QMainWindow):
         return f"{event_type}_{event_time.strftime('%Y%m%d_%H%M')}"
 
     def _is_time_to_play(self, now, scheduled_time):
+        resume_time = getattr(self, "_holidays_resume_time", None)
+        if resume_time and scheduled_time < resume_time:
+            # Событие относится ко времени каникул и уже пропущено.
+            return False
         diff = (now - scheduled_time).total_seconds()
         return 0 <= diff < PLAYBACK_TRIGGER_WINDOW_SECONDS
 
@@ -1526,7 +1535,9 @@ class SchoolBell(QMainWindow):
     def show_holiday_settings(self):
         """Открыть диалог графика каникул."""
         from src.holiday_settings_dialog import HolidaySettingsDialog
-        dlg = HolidaySettingsDialog(self, self.config, self.tr)
+        dlg = HolidaySettingsDialog(
+            self, self.config, self.tr, self.current_locale
+        )
         if dlg.exec() == QDialog.Accepted:
             self._refresh_holidays_state(force=True)
             self.statusLabel.setText(self.tr("holidays_settings_saved", "Каникулы обновлены"))

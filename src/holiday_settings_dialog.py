@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, QLocale, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDateEdit, QDialog, QGroupBox,
     QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
@@ -14,10 +14,15 @@ from src.config_manager import ConfigManager
 class HolidaySettingsDialog(QDialog):
     """Настройка графика каникул и ручного режима."""
 
-    def __init__(self, parent, config_manager: ConfigManager, tr=None):
+    def __init__(self, parent, config_manager: ConfigManager, tr=None, locale="ru"):
         super().__init__(parent)
         self.config = config_manager
         self.tr = tr or (lambda key, fallback=None: fallback or key)
+        self.locale = locale if locale in ("ru", "en") else "ru"
+        self.qt_locale = QLocale(self.locale)
+        self.date_format = (
+            "d MMMM yyyy" if self.locale == "ru" else "MMMM d, yyyy"
+        )
         self.periods = list(config_manager.get_holidays()["periods"])
 
         self.setWindowTitle(self.tr("holidays_dialog_title", "🏖 График каникул"))
@@ -55,16 +60,18 @@ class HolidaySettingsDialog(QDialog):
         dates_layout = QHBoxLayout()
         dates_layout.addWidget(QLabel(self.tr("holidays_start", "Начало:")))
         self.start_edit = QDateEdit()
+        self.start_edit.setLocale(self.qt_locale)
         self.start_edit.setCalendarPopup(True)
-        self.start_edit.setDisplayFormat("yyyy-MM-dd")
+        self.start_edit.setDisplayFormat(self.date_format)
         self.start_edit.setDateRange(QDate(2000, 1, 1), QDate(2100, 12, 31))
         self.start_edit.setDate(QDate.currentDate())
         dates_layout.addWidget(self.start_edit)
 
         dates_layout.addWidget(QLabel(self.tr("holidays_end", "Окончание:")))
         self.end_edit = QDateEdit()
+        self.end_edit.setLocale(self.qt_locale)
         self.end_edit.setCalendarPopup(True)
-        self.end_edit.setDisplayFormat("yyyy-MM-dd")
+        self.end_edit.setDisplayFormat(self.date_format)
         self.end_edit.setDateRange(QDate(2000, 1, 1), QDate(2100, 12, 31))
         self.end_edit.setDate(QDate.currentDate())
         dates_layout.addWidget(self.end_edit)
@@ -100,8 +107,17 @@ class HolidaySettingsDialog(QDialog):
 
         self.reload_list()
 
+    def _format_date(self, iso_date):
+        date = QDate.fromString(iso_date, "yyyy-MM-dd")
+        if not date.isValid():
+            return iso_date
+        return self.qt_locale.toString(date, self.date_format)
+
     def _period_text(self, period):
-        return f"{period['start']} — {period['end']}"
+        return (
+            f"{self._format_date(period['start'])} — "
+            f"{self._format_date(period['end'])}"
+        )
 
     def reload_list(self, select_index=None):
         self.periods_list.blockSignals(True)
